@@ -1,4 +1,5 @@
 import "./globals.css";
+import ClientLayout from "./ClientLayout";
 
 export const metadata = {
   title: "Jurnal Mengajar Dashboard",
@@ -19,7 +20,7 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body className="bg-background text-on-background antialiased min-h-screen flex flex-col font-body-md">
-        {children}
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   );

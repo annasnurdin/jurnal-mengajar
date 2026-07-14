@@ -2,20 +2,48 @@
 
 import { useState, useEffect } from "react";
 
+const initialDummyData = [
+  {
+    _rowNum: 1,
+    "Hari, tanggal": "Senin, 12 Okt 2023",
+    "Jam ke-": "1-2",
+    "Kelas": "7A",
+    "Materi Pokok": "Aljabar Linier Dasar",
+    "Kegiatan Pembelajaran": "Pengenalan konsep variabel dan persamaan linear satu variabel beserta contoh aplikasinya dalam kehidupan sehari-hari.",
+    "Kehadiran": "H:30, A:2"
+  },
+  {
+    _rowNum: 2,
+    "Hari, tanggal": "Senin, 12 Okt 2023",
+    "Jam ke-": "4-5",
+    "Kelas": "8C",
+    "Materi Pokok": "Statistika Dasar",
+    "Kegiatan Pembelajaran": "Praktik pengumpulan data di lapangan dan penyusunan tabel distribusi frekuensi tunggal.",
+    "Kehadiran": "H:32, I:1"
+  },
+  {
+    _rowNum: 3,
+    "Hari, tanggal": "Jumat, 09 Okt 2023",
+    "Jam ke-": "1-2",
+    "Kelas": "7A",
+    "Materi Pokok": "Review UTS",
+    "Kegiatan Pembelajaran": "Membahas soal-soal Ujian Tengah Semester yang banyak salah dijawab oleh siswa.",
+    "Kehadiran": "H:32"
+  }
+];
+
 export default function Home() {
   const [entries, setEntries] = useState([]);
   const [parsedEntries, setParsedEntries] = useState([]);
   const [metadata, setMetadata] = useState({
-    mataPelajaran: "Pendidikan Pancasila",
-    kelas: "7D",
-    semester: "II",
-    tahunAjaran: "2025/2026",
+    mataPelajaran: "Matematika",
+    kelas: "7A",
+    semester: "I",
+    tahunAjaran: "2023/2024",
   });
-  const [headerMapping, setHeaderMapping] = useState(null);
   
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
 
   // Modal States
@@ -28,6 +56,7 @@ export default function Home() {
   const [formData, setFormData] = useState({
     "Hari, tanggal": "",
     "Jam ke-": "",
+    "Kelas": "7A",
     "Materi Pokok": "",
     "Kegiatan Pembelajaran": "",
     "Kehadiran": "",
@@ -65,7 +94,6 @@ export default function Home() {
     const dayNum = date.getDate();
     const monthName = months[date.getMonth()];
     const year = date.getFullYear();
-    // Using format matching home.html: "Senin, 12 Okt 2023"
     return `${dayName}, ${dayNum < 10 ? '0' + dayNum : dayNum} ${monthName} ${year}`;
   };
 
@@ -106,7 +134,7 @@ export default function Home() {
           return (
             <span
               key={idx}
-              className={`${badgeClass} text-[10px] px-1.5 py-0.5 rounded-full`}
+              className={`${badgeClass} text-[10px] px-1.5 py-0.5 rounded-full font-semibold`}
               title={badge.title}
             >
               {badge.label}
@@ -117,135 +145,14 @@ export default function Home() {
     );
   };
 
-  // Parse spreadsheet rows for metadata and dynamic data entries
-  const processRawEntries = (rawEntries) => {
-    let tempMetadata = {
-      mataPelajaran: "Pendidikan Pancasila",
-      kelas: "7D",
-      semester: "II",
-      tahunAjaran: "2025/2026"
-    };
-    let journalEntries = [];
-    let foundHeaderMapping = null;
-    let headerRowIndex = -1;
-
-    // 1. Find if there's a row containing "Hari, tanggal"
-    for (let i = 0; i < rawEntries.length; i++) {
-      const row = rawEntries[i];
-      const isHeaderRow = Object.values(row).some(
-        (val) => typeof val === "string" && val.trim().toLowerCase() === "hari, tanggal"
-      );
-      if (isHeaderRow) {
-        headerRowIndex = i;
-        foundHeaderMapping = row;
-        break;
-      }
-    }
-
-    if (headerRowIndex !== -1) {
-      setHeaderMapping(foundHeaderMapping);
-      
-      // 2. Parse metadata from rows before the header row
-      for (let i = 0; i < headerRowIndex; i++) {
-        const row = rawEntries[i];
-        const keys = Object.keys(row);
-        let label = "";
-        let value = "";
-        for (let key of keys) {
-          if (key === "_rowNum") continue;
-          const val = String(row[key] || "").trim();
-          const cleanVal = val.toLowerCase();
-          if (cleanVal === "kelas") {
-            label = "kelas";
-          } else if (cleanVal === "mata pelajaran") {
-            label = "mataPelajaran";
-          } else if (cleanVal === "semester") {
-            label = "semester";
-          } else if (cleanVal === "tahun ajaran") {
-            label = "tahunAjaran";
-          } else if (val !== ":" && val !== "") {
-            value = val;
-          }
-        }
-        if (label && value) {
-          tempMetadata[label] = value;
-        }
-      }
-      setMetadata(tempMetadata);
-
-      // 3. Parse journal entries from rows after the header row
-      const internalToHeaderKey = {};
-      Object.keys(foundHeaderMapping).forEach((internalKey) => {
-        if (internalKey === "_rowNum") return;
-        const headerName = String(foundHeaderMapping[internalKey] || "").trim();
-        if (headerName) {
-          internalToHeaderKey[internalKey] = headerName;
-        }
-      });
-
-      for (let i = headerRowIndex + 1; i < rawEntries.length; i++) {
-        const row = rawEntries[i];
-        const mappedEntry = { _rowNum: row._rowNum };
-        
-        Object.keys(row).forEach((internalKey) => {
-          if (internalKey === "_rowNum") return;
-          const headerName = internalToHeaderKey[internalKey];
-          if (headerName) {
-            mappedEntry[headerName] = row[internalKey];
-          } else {
-            mappedEntry[internalKey] = row[internalKey];
-          }
-        });
-        
-        if (mappedEntry["Hari, tanggal"] || mappedEntry["Materi Pokok"]) {
-          journalEntries.push(mappedEntry);
-        }
-      }
-      setParsedEntries(journalEntries);
-    } else {
-      setHeaderMapping(null);
-      // Filter out invalid/empty rows
-      const filtered = rawEntries.filter(entry => {
-        return (
-          entry["Hari, tanggal"] ||
-          entry["Materi Pokok"]
-        ) && (
-          entry["Hari, tanggal"] !== "Hari, tanggal"
-        );
-      });
-      setParsedEntries(filtered);
-    }
-  };
-
-  // Fetch all Jurnal entries
-  const fetchEntries = async () => {
-    setIsLoading(true);
-    setError("");
-    try {
-      const res = await fetch("/api/jurnal");
-      const result = await res.json();
-      
-      if (res.status === 500) {
-        setError(result.error || "Gagal memuat data");
-        return;
-      }
-
-      if (result.error) {
-        setError(result.error);
-      } else {
-        const raw = result.data || [];
-        setEntries(raw);
-        processRawEntries(raw);
-      }
-    } catch (err) {
-      setError("Tidak dapat terhubung ke server. Pastikan .env terkonfigurasi.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+  // Simulate server fetch on component mount
   useEffect(() => {
-    fetchEntries();
+    const timer = setTimeout(() => {
+      setEntries(initialDummyData);
+      setParsedEntries(initialDummyData);
+      setIsLoading(false);
+    }, 600);
+    return () => clearTimeout(timer);
   }, []);
 
   // Handle Date picker selection
@@ -266,6 +173,7 @@ export default function Home() {
     setFormData({
       "Hari, tanggal": "",
       "Jam ke-": "",
+      "Kelas": "7A",
       "Materi Pokok": "",
       "Kegiatan Pembelajaran": "",
       "Kehadiran": "",
@@ -280,6 +188,7 @@ export default function Home() {
     setFormData({
       "Hari, tanggal": entry["Hari, tanggal"] || "",
       "Jam ke-": entry["Jam ke-"] || "",
+      "Kelas": entry["Kelas"] || "7A",
       "Materi Pokok": entry["Materi Pokok"] || "",
       "Kegiatan Pembelajaran": entry["Kegiatan Pembelajaran"] || "",
       "Kehadiran": entry["Kehadiran"] || "",
@@ -288,31 +197,7 @@ export default function Home() {
     setIsModalOpen(true);
   };
 
-  // Map user-friendly formData back to sheet columns
-  const getPayload = (data) => {
-    if (!headerMapping) {
-      return data;
-    }
-    const payload = {};
-    Object.keys(headerMapping).forEach((internalKey) => {
-      if (internalKey === "_rowNum") return;
-      const headerName = String(headerMapping[internalKey] || "").trim();
-      if (headerName === "Hari, tanggal") {
-        payload[internalKey] = data["Hari, tanggal"];
-      } else if (headerName === "Jam ke-") {
-        payload[internalKey] = data["Jam ke-"];
-      } else if (headerName === "Materi Pokok") {
-        payload[internalKey] = data["Materi Pokok"];
-      } else if (headerName === "Kegiatan Pembelajaran") {
-        payload[internalKey] = data["Kegiatan Pembelajaran"];
-      } else if (headerName === "Kehadiran") {
-        payload[internalKey] = data["Kehadiran"];
-      }
-    });
-    return payload;
-  };
-
-  // Submit form (Create or Update)
+  // Submit form (Create or Update Locally)
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData["Hari, tanggal"] || !formData["Materi Pokok"]) {
@@ -321,59 +206,55 @@ export default function Home() {
     }
 
     setIsSubmitting(true);
-    try {
-      const payloadData = getPayload(formData);
+    setTimeout(() => {
       if (modalMode === "create") {
-        const res = await fetch("/api/jurnal", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payloadData),
-        });
-        const result = await res.json();
-        if (result.error) throw new Error(result.error);
+        const newEntry = {
+          _rowNum: entries.length > 0 ? Math.max(...entries.map(e => e._rowNum)) + 1 : 1,
+          "Hari, tanggal": formData["Hari, tanggal"],
+          "Jam ke-": formData["Jam ke-"],
+          "Kelas": formData["Kelas"],
+          "Materi Pokok": formData["Materi Pokok"],
+          "Kegiatan Pembelajaran": formData["Kegiatan Pembelajaran"],
+          "Kehadiran": formData["Kehadiran"],
+        };
+        const updated = [...entries, newEntry];
+        setEntries(updated);
+        setParsedEntries(updated);
         showToast("Jurnal berhasil ditambahkan!");
       } else {
         // Edit mode
-        const res = await fetch("/api/jurnal", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: selectedEntry._rowNum,
-            data: payloadData,
-          }),
+        const updated = entries.map((entry) => {
+          if (entry._rowNum === selectedEntry._rowNum) {
+            return {
+              ...entry,
+              "Hari, tanggal": formData["Hari, tanggal"],
+              "Jam ke-": formData["Jam ke-"],
+              "Kelas": formData["Kelas"],
+              "Materi Pokok": formData["Materi Pokok"],
+              "Kegiatan Pembelajaran": formData["Kegiatan Pembelajaran"],
+              "Kehadiran": formData["Kehadiran"],
+            };
+          }
+          return entry;
         });
-        const result = await res.json();
-        if (result.error) throw new Error(result.error);
+        setEntries(updated);
+        setParsedEntries(updated);
         showToast("Jurnal berhasil diperbarui!");
       }
       setIsModalOpen(false);
-      fetchEntries();
-    } catch (err) {
-      showToast(err.message || "Terjadi kesalahan sistem", "error");
-    } finally {
       setIsSubmitting(false);
-    }
+    }, 400);
   };
 
-  // Delete an entry
+  // Delete an entry locally
   const handleDelete = async (entry) => {
     if (!confirm(`Apakah Anda yakin ingin menghapus jurnal pada ${entry["Hari, tanggal"]}?`)) {
       return;
     }
-
-    try {
-      const res = await fetch(`/api/jurnal?id=${entry._rowNum}`, {
-        method: "DELETE",
-      });
-      const result = await res.json();
-
-      if (result.error) throw new Error(result.error);
-
-      showToast("Jurnal berhasil dihapus!", "success");
-      fetchEntries();
-    } catch (err) {
-      showToast(err.message || "Gagal menghapus jurnal", "error");
-    }
+    const updated = entries.filter((e) => e._rowNum !== entry._rowNum);
+    setEntries(updated);
+    setParsedEntries(updated);
+    showToast("Jurnal berhasil dihapus!", "success");
   };
 
   // Filter entries based on search
@@ -383,7 +264,8 @@ export default function Home() {
       (entry["Hari, tanggal"] || "").toLowerCase().includes(query) ||
       (entry["Materi Pokok"] || "").toLowerCase().includes(query) ||
       (entry["Kegiatan Pembelajaran"] || "").toLowerCase().includes(query) ||
-      (entry["Kehadiran"] || "").toLowerCase().includes(query)
+      (entry["Kehadiran"] || "").toLowerCase().includes(query) ||
+      (entry["Kelas"] || "").toLowerCase().includes(query)
     );
   });
 
@@ -404,66 +286,43 @@ export default function Home() {
         </div>
       )}
 
-      {/* TopAppBar */}
-      <header className="bg-surface border-b border-outline-variant fixed top-0 w-full z-50 flex items-center justify-between px-container-margin h-16">
-        <button
-          onClick={() => showToast("Menu navigasi sidebar akan segera hadir!", "info")}
-          className="text-on-surface-variant hover:bg-surface-container-high transition-colors p-2 rounded-full active:opacity-80 flex items-center justify-center"
-        >
-          <span className="material-symbols-outlined">menu</span>
-        </button>
-        
-        <div className="font-h1-mobile text-h1-mobile font-semibold text-primary flex items-center gap-sm">
-          <span>Jurnal Mengajar</span>
-          <span className="hidden sm:inline-block text-xs bg-primary-container text-on-primary-container px-3 py-0.5 rounded-full font-normal">
-            {metadata.kelas} - {metadata.mataPelajaran}
-          </span>
-        </div>
-
-        <button
-          onClick={fetchEntries}
-          className="hover:bg-surface-container-high transition-colors p-1 rounded-full active:opacity-80 overflow-hidden w-10 h-10 flex items-center justify-center"
-          title="Refresh Data"
-        >
-          {isLoading ? (
-            <span className="material-symbols-outlined text-[24px] animate-spin text-primary">sync</span>
-          ) : (
-            <img
-              alt="Profile picture of educator"
-              className="w-full h-full object-cover rounded-full"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuAvojQwEtGFaVdGzsoleYLUMtjK6m88IoL7ytbZq_yTAq6kJa_hs08rjN3cTJM5b-edFscwNn6DQLKqcfUJsGv66f0fghI75Zdw58jtjyCpMvKE6-kSOWhQRjC_MKThVHVYzBRbpgcg5GXScP8271mdyauSXWEHaiPkFBp6Jaz0bKjZdS2qZoRmzpifJknU23Qgk0RRLEdUGICMQ6yyLaPLDtmKvnhBhGwp6bfnaxZU_q5D2UaHjZqy2_VAcVJrC_iaTzVLYDaoZw"
-            />
-          )}
-        </button>
-      </header>
-
       {/* Main Canvas */}
-      <main className="flex-grow pt-[80px] pb-[100px] md:pb-lg px-container-margin max-w-7xl mx-auto w-full">
-        {/* Error / Alert Config Bar */}
-        {error && (
-          <div className="bg-error-container text-on-error-container border border-error/20 rounded-lg p-md mb-lg flex gap-md">
-            <span className="material-symbols-outlined text-error">warning</span>
-            <div className="text-body-md">
-              <p className="font-semibold">Terjadi Kendala Koneksi Sheet</p>
-              <p className="mt-xs opacity-90">{error}</p>
-              <p className="mt-sm text-xs font-semibold underline decoration-dotted">
-                <a href="/dokumen.md" target="_blank">
-                  Silakan baca dokumen.md untuk memverifikasi konfigurasi URL Web App
-                </a>
-              </p>
+      <main className="flex-grow px-container-margin py-md max-w-7xl mx-auto w-full">
+        
+        {/* Dashboard Analytics / Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter mb-lg">
+          <div className="bg-surface border border-outline-variant rounded-lg p-md shadow-sm flex items-center justify-between">
+            <div>
+              <p className="font-label-caps text-label-caps text-on-surface-variant">Total Entri</p>
+              <p className="font-display text-display text-primary mt-xs">{parsedEntries.length}</p>
+            </div>
+            <div className="h-12 w-12 bg-secondary-container text-on-secondary-container rounded-full flex items-center justify-center">
+              <span className="material-symbols-outlined">history_edu</span>
             </div>
           </div>
-        )}
+          
+          <div className="bg-surface border border-outline-variant rounded-lg p-md shadow-sm flex items-center justify-between">
+            <div>
+              <p className="font-label-caps text-label-caps text-on-surface-variant">Update Terakhir</p>
+              <p className="font-h3 text-h3 text-on-surface mt-sm">
+                {parsedEntries.length > 0 ? parsedEntries[parsedEntries.length - 1]["Hari, tanggal"] : "-"}
+              </p>
+            </div>
+            <div className="h-12 w-12 bg-secondary-container text-on-secondary-container rounded-full flex items-center justify-center">
+              <span className="material-symbols-outlined">calendar_today</span>
+            </div>
+          </div>
 
-        {/* Dynamic Class & Subject Banner for Mobile View */}
-        <div className="sm:hidden bg-surface-container-low border border-outline-variant rounded-lg p-md mb-lg">
-          <div className="flex flex-col gap-xs">
-            <span className="font-label-caps text-label-caps text-on-surface-variant">Mata Pelajaran / Kelas</span>
-            <span className="font-h3 text-h3 text-primary">{metadata.mataPelajaran} ({metadata.kelas})</span>
-            <div className="flex gap-sm text-on-surface-variant font-caption text-caption mt-xs">
-              <span>Sem: {metadata.semester}</span>
-              <span>•</span>
-              <span>TA: {metadata.tahunAjaran}</span>
+          <div className="bg-surface border border-outline-variant rounded-lg p-md shadow-sm flex items-center justify-between">
+            <div>
+              <p className="font-label-caps text-label-caps text-on-surface-variant">Status Database</p>
+              <p className="font-h3 text-h3 text-emerald-600 mt-sm flex items-center gap-xs">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Mode Demo (Lokal)
+              </p>
+            </div>
+            <div className="h-12 w-12 bg-secondary-container text-on-secondary-container rounded-full flex items-center justify-center">
+              <span className="material-symbols-outlined">cloud_off</span>
             </div>
           </div>
         </div>
@@ -491,7 +350,7 @@ export default function Home() {
               <span className="font-label-caps text-label-caps hidden sm:inline">Tanggal</span>
             </button>
             <button
-              onClick={() => showToast(`Filter Kelas: ${metadata.kelas}`, "info")}
+              onClick={() => showToast("Filter kelas akan segera hadir!", "info")}
               className="bg-surface border border-outline rounded p-3 text-on-surface-variant flex items-center gap-xs hover:bg-surface-container-high transition-colors"
             >
               <span className="material-symbols-outlined text-[20px]">filter_list</span>
@@ -503,7 +362,7 @@ export default function Home() {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center p-xl gap-md text-on-surface-variant">
             <span className="material-symbols-outlined text-[48px] animate-spin text-primary">sync</span>
-            <p className="font-body-lg text-body-lg">Memuat data dari Google Sheets...</p>
+            <p className="font-body-lg text-body-lg">Memuat data...</p>
           </div>
         ) : filteredEntries.length === 0 ? (
           <div className="bg-surface border border-outline-variant rounded-lg p-xl text-center flex flex-col items-center gap-md">
@@ -552,7 +411,7 @@ export default function Home() {
                   </div>
                   <div className="flex items-center justify-between border-t border-outline-variant pt-sm mt-sm">
                     <div className="font-caption text-caption text-secondary">
-                      Kelas {entry["Kelas"] || metadata.kelas}
+                      Kelas {entry["Kelas"]}
                     </div>
                     <div className="flex items-center gap-sm">
                       {renderKehadiranBadges(entry["Kehadiran"])}
@@ -618,7 +477,7 @@ export default function Home() {
                           {entry["Jam ke-"] || "-"}
                         </span>
                       </td>
-                      <td className="py-3 px-4">{entry["Kelas"] || metadata.kelas}</td>
+                      <td className="py-3 px-4">{entry["Kelas"]}</td>
                       <td className="py-3 px-4 font-semibold">{entry["Materi Pokok"]}</td>
                       <td className="py-3 px-4 text-on-surface-variant truncate max-w-[200px]" title={entry["Kegiatan Pembelajaran"]}>
                         {entry["Kegiatan Pembelajaran"] || "-"}
@@ -662,53 +521,6 @@ export default function Home() {
           add
         </span>
       </button>
-
-      {/* BottomNavBar (Mobile Only) */}
-      <nav className="md:hidden bg-surface border-t border-outline-variant fixed bottom-0 w-full z-50 flex justify-around items-center h-20 px-2 pb-safe">
-        {/* Active Tab: Jurnal */}
-        <button
-          onClick={() => showToast("Anda sudah berada di halaman Jurnal", "info")}
-          className="flex flex-col items-center justify-center gap-1 min-w-[64px] active:scale-95 transition-transform"
-        >
-          <div className="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-4 py-1">
-            <span className="material-symbols-outlined icon-fill">history_edu</span>
-          </div>
-          <span className="font-label-caps text-label-caps text-on-surface font-semibold">Jurnal</span>
-        </button>
-
-        {/* Inactive Tab: Siswa */}
-        <button
-          onClick={() => showToast("Halaman Daftar Siswa akan segera hadir!", "info")}
-          className="flex flex-col items-center justify-center gap-1 min-w-[64px] text-on-surface-variant hover:bg-surface-container-highest rounded-lg p-1 transition-colors active:scale-95"
-        >
-          <div className="flex flex-col items-center justify-center px-4 py-1">
-            <span className="material-symbols-outlined">group</span>
-          </div>
-          <span className="font-label-caps text-label-caps">Siswa</span>
-        </button>
-
-        {/* Inactive Tab: Kelas */}
-        <button
-          onClick={() => showToast("Halaman Manajemen Kelas akan segera hadir!", "info")}
-          className="flex flex-col items-center justify-center gap-1 min-w-[64px] text-on-surface-variant hover:bg-surface-container-highest rounded-lg p-1 transition-colors active:scale-95"
-        >
-          <div className="flex flex-col items-center justify-center px-4 py-1">
-            <span className="material-symbols-outlined">school</span>
-          </div>
-          <span className="font-label-caps text-label-caps">Kelas</span>
-        </button>
-
-        {/* Inactive Tab: Materi */}
-        <button
-          onClick={() => showToast("Halaman Modul & Materi akan segera hadir!", "info")}
-          className="flex flex-col items-center justify-center gap-1 min-w-[64px] text-on-surface-variant hover:bg-surface-container-highest rounded-lg p-1 transition-colors active:scale-95"
-        >
-          <div className="flex flex-col items-center justify-center px-4 py-1">
-            <span className="material-symbols-outlined">menu_book</span>
-          </div>
-          <span className="font-label-caps text-label-caps">Materi</span>
-        </button>
-      </nav>
 
       {/* CRUD MODAL FORM */}
       {isModalOpen && (
@@ -771,6 +583,29 @@ export default function Home() {
                   }
                   className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
                 />
+              </div>
+
+              {/* Kelas Selection */}
+              <div className="flex flex-col gap-xs">
+                <label className="font-label-caps text-label-caps text-on-surface-variant">
+                  Kelas <span className="text-error">*</span>
+                </label>
+                <select
+                  required
+                  value={formData["Kelas"]}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, "Kelas": e.target.value }))
+                  }
+                  className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
+                >
+                  <option value="7A">Kelas 7A</option>
+                  <option value="7B">Kelas 7B</option>
+                  <option value="7C">Kelas 7C</option>
+                  <option value="7D">Kelas 7D</option>
+                  <option value="8A">Kelas 8A</option>
+                  <option value="8C">Kelas 8C</option>
+                  <option value="9A">Kelas 9A</option>
+                </select>
               </div>
 
               {/* Materi Pokok */}
