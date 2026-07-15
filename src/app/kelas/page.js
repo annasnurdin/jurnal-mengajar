@@ -12,7 +12,6 @@ const initialClasses = [
 
 export default function KelasPage() {
   const [classes, setClasses] = useState([]);
-  const [filteredClasses, setFilteredClasses] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
@@ -37,28 +36,21 @@ export default function KelasPage() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setClasses(initialClasses);
-      setFilteredClasses(initialClasses);
       setIsLoading(false);
     }, 500);
     return () => clearTimeout(timer);
   }, []);
 
-  // Handle Search filtering
-  useEffect(() => {
-    if (searchQuery.trim() === "") {
-      setFilteredClasses(classes);
-    } else {
-      const query = searchQuery.toLowerCase();
-      setFilteredClasses(
-        classes.filter(
-          (c) =>
-            c.name.toLowerCase().includes(query) ||
-            c.code.toLowerCase().includes(query) ||
-            c.type.toLowerCase().includes(query)
-        )
-      );
-    }
-  }, [searchQuery, classes]);
+  // Compute filtered classes dynamically on render
+  const filteredClasses = classes.filter((c) => {
+    if (searchQuery.trim() === "") return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      c.name.toLowerCase().includes(query) ||
+      c.code.toLowerCase().includes(query) ||
+      c.type.toLowerCase().includes(query)
+    );
+  });
 
   // Create new class
   const openCreateModal = () => {

@@ -30,7 +30,7 @@ export default function TambahSiswaPage() {
 
     // Retrieve current list from localStorage
     const stored = localStorage.getItem("daftar_siswa");
-    let currentStudents = initialStudents;
+    let currentStudents = [];
     if (stored) {
       try {
         currentStudents = JSON.parse(stored);
@@ -39,12 +39,13 @@ export default function TambahSiswaPage() {
       }
     }
 
-    // Create new student object (ID only, no NIS)
+    // Create new student object with isNew flag
     const newStudent = {
-      id: currentStudents.length > 0 ? Math.max(...currentStudents.map(s => s.id)) + 1 : 1,
+      id: Date.now(),
       name: namaLengkap,
       class: pilihKelas,
-      nis: "" // No NIS, only ID as requested
+      nis: "",
+      isNew: true
     };
 
     const updated = [...currentStudents, newStudent];
@@ -119,7 +120,13 @@ export default function TambahSiswaPage() {
                     Pilih kelas yang tersedia
                   </option>
                   <option value="7A">Kelas 7A</option>
+                  <option value="7B">Kelas 7B</option>
+                  <option value="7C">Kelas 7C</option>
+                  <option value="7D">Kelas 7D</option>
+                  <option value="8A">Kelas 8A</option>
+                  <option value="8B">Kelas 8B</option>
                   <option value="8C">Kelas 8C</option>
+                  <option value="9A">Kelas 9A</option>
                   <option value="9B">Kelas 9B</option>
                   <option value="X-A">Kelas X - A</option>
                   <option value="X-B">Kelas X - B</option>
