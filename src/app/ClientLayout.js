@@ -18,8 +18,10 @@ export default function ClientLayout({ children }) {
   const isKelasActive = pathname.startsWith("/kelas");
   const isManajemenActive = pathname === "/manajemen";
 
+  const isTambahSiswa = pathname === "/siswa/tambah-siswa";
+
   return (
-    <div className="min-h-screen flex flex-col pt-16 pb-20 md:pb-0 md:pl-80 bg-background text-on-background">
+    <div className={`min-h-screen flex flex-col pt-16 ${isTambahSiswa ? "pb-0" : "pb-20"} md:pb-0 md:pl-72 bg-background text-on-background`}>
       {/* Toast Notification */}
       {toast && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-4 py-3 rounded-lg shadow-md border animate-fade-in bg-inverse-surface text-inverse-on-surface border-transparent">
@@ -28,26 +30,40 @@ export default function ClientLayout({ children }) {
       )}
 
       {/* TopAppBar (Mobile & Tablet) */}
-      <header className="bg-surface border-b border-outline-variant fixed top-0 w-full z-50 flex justify-between items-center px-container-margin h-16 md:w-[calc(100%-20rem)] md:left-80 transition-all">
+      <header className="bg-surface border-b border-outline-variant fixed top-0 w-full z-50 flex justify-between items-center px-container-margin h-16 md:w-[calc(100%-18rem)] md:left-72 transition-all">
         <div className="flex items-center gap-4">
-          <button
-            onClick={() => showToast("Menu sidebar akan segera hadir!", "info")}
-            className="md:hidden text-primary hover:bg-surface-container-high transition-colors p-2 rounded-full flex items-center justify-center"
-          >
-            <span className="material-symbols-outlined">menu</span>
-          </button>
-          <h1 className="font-h1-mobile text-h1-mobile font-bold text-primary">Jurnal Mengajar</h1>
+          {isTambahSiswa ? (
+            <Link
+              href="/siswa"
+              className="md:hidden text-primary hover:bg-surface-container-high transition-colors p-2 rounded-full flex items-center justify-center"
+            >
+              <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>arrow_back</span>
+            </Link>
+          ) : (
+            <button
+              onClick={() => showToast("Menu sidebar akan segera hadir!", "info")}
+              className="md:hidden text-primary hover:bg-surface-container-high transition-colors p-2 rounded-full flex items-center justify-center"
+            >
+              <span className="material-symbols-outlined">menu</span>
+            </button>
+          )}
+          <h1 className="font-h1-mobile text-h1-mobile font-bold text-primary">
+            <span className="md:hidden">{isTambahSiswa ? "Tambah Siswa" : "Jurnal Mengajar"}</span>
+            <span className="hidden md:inline">Jurnal Mengajar</span>
+          </h1>
         </div>
-        <button
-          onClick={() => showToast("Fitur Pencarian Aktif!", "info")}
-          className="text-primary hover:bg-surface-container-high transition-colors p-2 rounded-full flex items-center justify-center"
-        >
-          <span className="material-symbols-outlined">search</span>
-        </button>
+        {(!isTambahSiswa || true) && (
+          <button
+            onClick={() => showToast("Fitur Pencarian Aktif!", "info")}
+            className={`${isTambahSiswa ? "hidden md:flex" : "flex"} text-primary hover:bg-surface-container-high transition-colors p-2 rounded-full items-center justify-center`}
+          >
+            <span className="material-symbols-outlined">search</span>
+          </button>
+        )}
       </header>
 
       {/* NavigationDrawer (Web/Desktop Only) */}
-      <aside className="hidden md:flex fixed inset-y-0 left-0 z-[60] flex-col py-lg h-full w-80 rounded-r-xl bg-surface shadow-lg border-r border-outline-variant">
+      <aside className="hidden md:flex fixed inset-y-0 left-0 z-[60] flex-col py-lg h-full w-72 rounded-r-xl bg-surface shadow-lg border-r border-outline-variant">
         {/* Profile Header */}
         <div className="px-container-margin mb-8 flex items-center gap-4">
           <img
@@ -116,79 +132,81 @@ export default function ClientLayout({ children }) {
       </div>
 
       {/* BottomNavBar (Mobile Only) - Fixed Bottom */}
-      <nav className="md:hidden bg-surface border-t border-outline-variant fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-20 px-2 pb-safe">
-        {/* Tab Jurnal */}
-        <Link
-          href="/"
-          className="flex flex-col items-center justify-center w-16 h-full font-label-caps text-label-caps"
-        >
-          {isJurnalActive ? (
-            <div className="bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 scale-95 active:scale-90 transition-transform font-semibold flex flex-col items-center justify-center">
-              <span className="material-symbols-outlined icon-fill">history_edu</span>
-              <span className="text-[10px] mt-0.5">Jurnal</span>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-transform scale-95 active:scale-90">
-              <span className="material-symbols-outlined mb-1">history_edu</span>
-              <span>Jurnal</span>
-            </div>
-          )}
-        </Link>
+      {!isTambahSiswa && (
+        <nav className="md:hidden bg-surface border-t border-outline-variant fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-20 px-2 pb-safe">
+          {/* Tab Jurnal */}
+          <Link
+            href="/"
+            className="flex flex-col items-center justify-center w-16 h-full font-label-caps text-label-caps"
+          >
+            {isJurnalActive ? (
+              <div className="bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 scale-95 active:scale-90 transition-transform font-semibold flex flex-col items-center justify-center">
+                <span className="material-symbols-outlined icon-fill">history_edu</span>
+                <span className="text-[10px] mt-0.5">Jurnal</span>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-transform scale-95 active:scale-90">
+                <span className="material-symbols-outlined mb-1">history_edu</span>
+                <span>Jurnal</span>
+              </div>
+            )}
+          </Link>
 
-        {/* Tab Siswa */}
-        <Link
-          href="/siswa"
-          className="flex flex-col items-center justify-center w-16 h-full font-label-caps text-label-caps"
-        >
-          {isSiswaActive ? (
-            <div className="bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 scale-95 active:scale-90 transition-transform font-semibold flex flex-col items-center justify-center">
-              <span className="material-symbols-outlined icon-fill">groups</span>
-              <span className="text-[10px] mt-0.5">Siswa</span>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-transform scale-95 active:scale-90">
-              <span className="material-symbols-outlined mb-1">groups</span>
-              <span>Siswa</span>
-            </div>
-          )}
-        </Link>
+          {/* Tab Siswa */}
+          <Link
+            href="/siswa"
+            className="flex flex-col items-center justify-center w-16 h-full font-label-caps text-label-caps"
+          >
+            {isSiswaActive ? (
+              <div className="bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 scale-95 active:scale-90 transition-transform font-semibold flex flex-col items-center justify-center">
+                <span className="material-symbols-outlined icon-fill">groups</span>
+                <span className="text-[10px] mt-0.5">Siswa</span>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-transform scale-95 active:scale-90">
+                <span className="material-symbols-outlined mb-1">groups</span>
+                <span>Siswa</span>
+              </div>
+            )}
+          </Link>
 
-        {/* Tab Kelas */}
-        <Link
-          href="/kelas"
-          className="flex flex-col items-center justify-center w-16 h-full font-label-caps text-label-caps"
-        >
-          {isKelasActive ? (
-            <div className="bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 scale-95 active:scale-90 transition-transform font-semibold flex flex-col items-center justify-center">
-              <span className="material-symbols-outlined icon-fill">school</span>
-              <span className="text-[10px] mt-0.5">Kelas</span>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-transform scale-95 active:scale-90">
-              <span className="material-symbols-outlined mb-1">school</span>
-              <span>Kelas</span>
-            </div>
-          )}
-        </Link>
+          {/* Tab Kelas */}
+          <Link
+            href="/kelas"
+            className="flex flex-col items-center justify-center w-16 h-full font-label-caps text-label-caps"
+          >
+            {isKelasActive ? (
+              <div className="bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 scale-95 active:scale-90 transition-transform font-semibold flex flex-col items-center justify-center">
+                <span className="material-symbols-outlined icon-fill">school</span>
+                <span className="text-[10px] mt-0.5">Kelas</span>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-transform scale-95 active:scale-90">
+                <span className="material-symbols-outlined mb-1">school</span>
+                <span>Kelas</span>
+              </div>
+            )}
+          </Link>
 
-        {/* Tab Atur */}
-        <Link
-          href="/manajemen"
-          className="flex flex-col items-center justify-center w-16 h-full font-label-caps text-label-caps"
-        >
-          {isManajemenActive ? (
-            <div className="bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 scale-95 active:scale-90 transition-transform font-semibold flex flex-col items-center justify-center">
-              <span className="material-symbols-outlined icon-fill">settings</span>
-              <span className="text-[10px] mt-0.5">Atur</span>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-transform scale-95 active:scale-90">
-              <span className="material-symbols-outlined mb-1">settings</span>
-              <span>Atur</span>
-            </div>
-          )}
-        </Link>
-      </nav>
+          {/* Tab Atur */}
+          <Link
+            href="/manajemen"
+            className="flex flex-col items-center justify-center w-16 h-full font-label-caps text-label-caps"
+          >
+            {isManajemenActive ? (
+              <div className="bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 scale-95 active:scale-90 transition-transform font-semibold flex flex-col items-center justify-center">
+                <span className="material-symbols-outlined icon-fill">settings</span>
+                <span className="text-[10px] mt-0.5">Atur</span>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-transform scale-95 active:scale-90">
+                <span className="material-symbols-outlined mb-1">settings</span>
+                <span>Atur</span>
+              </div>
+            )}
+          </Link>
+        </nav>
+      )}
     </div>
   );
 }

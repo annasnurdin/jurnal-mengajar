@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
 const initialStudents = [
@@ -11,6 +11,7 @@ const initialStudents = [
 ];
 
 function SiswaContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const kelasParam = searchParams.get("kelas");
 
@@ -20,13 +21,13 @@ function SiswaContent() {
   const [selectedClassFilter, setSelectedClassFilter] = useState("Semua Kelas");
   const [isLoading, setIsLoading] = useState(true);
 
-  // Modal States for Student CRUD
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState("create"); // "create" | "edit"
-  const [selectedStudent, setSelectedStudent] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Modal States for Student Delete
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [studentToDelete, setStudentToDelete] = useState(null);
 
-  // Form States
+  // Modal States for Student Edit
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState(null);
   const [studentForm, setStudentForm] = useState({
     name: "",
     nis: "",
@@ -40,11 +41,22 @@ function SiswaContent() {
     setTimeout(() => setToast(null), 4000);
   };
 
-  // Load students dummy data on mount
+  // Load students dummy data on mount (from localStorage if exists, else initialStudents)
   useEffect(() => {
+    const stored = localStorage.getItem("daftar_siswa");
+    let currentStudents = initialStudents;
+    if (stored) {
+      try {
+        currentStudents = JSON.parse(stored);
+      } catch (e) {
+        console.error("Failed to parse stored students", e);
+      }
+    } else {
+      localStorage.setItem("daftar_siswa", JSON.stringify(initialStudents));
+    }
     const timer = setTimeout(() => {
-      setStudents(initialStudents);
-      setFilteredStudents(initialStudents);
+      setStudents(currentStudents);
+      setFilteredStudents(currentStudents);
       setIsLoading(false);
     }, 500);
     return () => clearTimeout(timer);
@@ -79,68 +91,55 @@ function SiswaContent() {
     setFilteredStudents(result);
   }, [searchQuery, selectedClassFilter, students]);
 
-  // Open Add Student Modal
-  const openCreateModal = () => {
-    setModalMode("create");
-    setSelectedStudent(null);
-    setStudentForm({
-      name: "",
-      nis: "",
-      class: "7A"
-    });
-    setIsModalOpen(true);
+  // Open Delete Confirmation Modal
+  const openDeleteModal = (student) => {
+    setStudentToDelete(student);
+    setIsDeleteModalOpen(true);
   };
 
-  // Open Edit Student Modal
+  const closeDeleteModal = () => {
+    setIsDeleteModalOpen(false);
+    setStudentToDelete(null);
+  };
+
+  const confirmDelete = () => {
+    if (!studentToDelete) return;
+    const updated = students.filter((s) => s.id !== studentToDelete.id);
+    setStudents(updated);
+    localStorage.setItem("daftar_siswa", JSON.stringify(updated));
+    showToast("Siswa berhasil dihapus!", "success");
+    setIsDeleteModalOpen(false);
+    setStudentToDelete(null);
+  };
+
   const openEditModal = (student) => {
-    setModalMode("edit");
     setSelectedStudent(student);
     setStudentForm({
       name: student.name,
-      nis: student.nis,
+      nis: student.nis || "",
       class: student.class
     });
-    setIsModalOpen(true);
+    setIsEditModalOpen(true);
   };
 
-  // Handle Form Submit (Local CRUD)
-  const handleSubmit = (e) => {
+  const closeEditModal = () => {
+    setIsEditModalOpen(false);
+    setSelectedStudent(null);
+  };
+
+  const handleEditSubmit = (e) => {
     e.preventDefault();
-    if (!studentForm.name || !studentForm.nis) {
-      showToast("Nama dan NIS wajib diisi!", "error");
+    if (!studentForm.name) {
+      showToast("Nama Lengkap wajib diisi!", "error");
       return;
     }
-
-    setIsSubmitting(true);
-    setTimeout(() => {
-      if (modalMode === "create") {
-        const newStudent = {
-          id: students.length > 0 ? Math.max(...students.map(s => s.id)) + 1 : 1,
-          name: studentForm.name,
-          nis: studentForm.nis,
-          class: studentForm.class
-        };
-        setStudents((prev) => [...prev, newStudent]);
-        showToast("Siswa berhasil ditambahkan!");
-      } else {
-        // Edit mode
-        setStudents((prev) =>
-          prev.map((s) => (s.id === selectedStudent.id ? { ...s, ...studentForm } : s))
-        );
-        showToast("Data siswa berhasil diperbarui!");
-      }
-      setIsModalOpen(false);
-      setIsSubmitting(false);
-    }, 400);
-  };
-
-  // Delete Student
-  const handleDelete = (student) => {
-    if (!confirm(`Apakah Anda yakin ingin menghapus siswa ${student.name}?`)) {
-      return;
-    }
-    setStudents((prev) => prev.filter((s) => s.id !== student.id));
-    showToast("Siswa berhasil dihapus!", "success");
+    const updated = students.map((s) =>
+      s.id === selectedStudent.id ? { ...s, ...studentForm } : s
+    );
+    setStudents(updated);
+    localStorage.setItem("daftar_siswa", JSON.stringify(updated));
+    showToast("Data siswa berhasil diperbarui!");
+    closeEditModal();
   };
 
   return (
@@ -155,7 +154,7 @@ function SiswaContent() {
       )}
 
       {/* Main Canvas */}
-      <main className="w-full max-w-4xl px-container-margin py-md flex-grow mx-auto">
+      <main className="w-full max-w-7xl px-container-margin py-md flex-grow mx-auto">
         
         {/* Header & Search */}
         <div className="mb-lg flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -212,12 +211,12 @@ function SiswaContent() {
               </p>
             </div>
             {!searchQuery && selectedClassFilter === "Semua Kelas" && (
-              <button
-                onClick={openCreateModal}
+              <Link
+                href="/siswa/tambah-siswa"
                 className="bg-primary text-on-primary font-label-caps text-label-caps px-4 py-2 rounded shadow-sm hover:bg-primary/90 transition-colors"
               >
                 Tambah Siswa Pertama
-              </button>
+              </Link>
             )}
           </div>
         ) : (
@@ -234,7 +233,7 @@ function SiswaContent() {
               return (
                 <div
                   key={student.id}
-                  className="bg-surface border border-outline-variant hover:border-primary p-4 rounded-xl flex items-center justify-between transition-colors cursor-pointer"
+                  className="bg-surface border border-outline-variant hover:border-primary p-4 rounded-xl flex items-center justify-between transition-colors cursor-pointer animate-fade-in"
                   onClick={() => openEditModal(student)}
                 >
                   <div className="flex items-center gap-4">
@@ -246,9 +245,11 @@ function SiswaContent() {
                     <div>
                       <h3 className="font-h3 text-h3 text-on-surface">{student.name}</h3>
                       <div className="flex gap-3 text-on-surface-variant font-caption text-caption mt-1">
-                        <span className="flex items-center gap-1">
-                          <span className="material-symbols-outlined text-[14px]">badge</span> {student.nis}
-                        </span>
+                        {student.nis && (
+                          <span className="flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[14px]">badge</span> {student.nis}
+                          </span>
+                        )}
                         <span className="flex items-center gap-1">
                           <span className="material-symbols-outlined text-[14px]">class</span> Kelas {student.class}
                         </span>
@@ -265,7 +266,7 @@ function SiswaContent() {
                     </button>
                     <button
                       aria-label="Delete"
-                      onClick={() => handleDelete(student)}
+                      onClick={() => openDeleteModal(student)}
                       className="p-2 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error-container"
                     >
                       <span className="material-symbols-outlined">delete</span>
@@ -279,110 +280,158 @@ function SiswaContent() {
       </main>
 
       {/* Floating Action Button (FAB) */}
-      <button
+      <Link
+        href="/siswa/tambah-siswa"
         aria-label="Tambah Siswa"
-        onClick={openCreateModal}
         className="fixed bottom-24 right-container-margin md:bottom-8 md:right-8 w-14 h-14 bg-primary text-on-primary rounded-2xl shadow-[0_8px_16px_rgba(30,64,175,0.25)] flex items-center justify-center hover:bg-primary/95 transition-all duration-300 z-40 active:scale-95 animate-fade-in"
       >
         <span className="material-symbols-outlined text-[28px]">add</span>
-      </button>
+      </Link>
 
-      {/* CRUD MODAL FORM (Student) */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-surface w-full max-w-lg rounded-lg shadow-2xl border border-outline-variant overflow-hidden transform scale-100 transition-all flex flex-col max-h-[90vh]">
-            
+      {/* Reusable Confirmation Modal (Replacing Alert Confirm) */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-surface w-[95%] sm:w-full max-w-2xl rounded-xl shadow-2xl border border-outline-variant overflow-hidden flex flex-col max-h-[90vh] animate-fade-in">
             {/* Modal Header */}
             <div className="px-6 py-4 bg-surface-container-low border-b border-outline-variant flex items-center justify-between">
-              <h2 className="font-h2 text-h2 text-on-surface">
-                {modalMode === "create" ? "Tambah Siswa Baru" : "Edit Data Siswa"}
-              </h2>
+              <h2 className="font-h2 text-h2 text-on-surface font-semibold">Hapus Data Siswa</h2>
               <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-on-surface-variant hover:bg-surface-container-high p-2 rounded-full transition-all flex items-center justify-center"
+                onClick={closeDeleteModal}
+                className="text-on-surface-variant hover:bg-surface-container-high p-2 rounded-full transition-all flex items-center justify-center active:scale-95 cursor-pointer"
+                aria-label="Close modal"
+                type="button"
               >
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
 
-            {/* Modal Form */}
-            <form onSubmit={handleSubmit} className="p-6 flex-1 overflow-y-auto space-y-4">
-              
-              {/* Nama Siswa */}
-              <div className="flex flex-col gap-xs">
-                <label className="font-label-caps text-label-caps text-on-surface-variant">
-                  Nama Lengkap <span className="text-error">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: Ahmad Fauzi"
-                  value={studentForm.name}
-                  onChange={(e) =>
-                    setStudentForm((prev) => ({ ...prev, name: e.target.value }))
-                  }
-                  className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
-                />
-              </div>
+            {/* Modal Content */}
+            <div className="p-6 flex-1 overflow-y-auto font-body-md text-body-md text-on-surface">
+              <p className="font-body-lg text-body-lg font-semibold">
+                Apakah Anda yakin ingin menghapus siswa?
+              </p>
+              {studentToDelete && (
+                <p className="font-body-md text-body-md text-on-surface-variant mt-2">
+                  Tindakan ini akan menghapus data siswa bernama <strong className="text-on-surface">{studentToDelete.name}</strong> secara permanen dari sistem.
+                </p>
+              )}
+            </div>
 
-              {/* NIS */}
-              <div className="flex flex-col gap-xs">
-                <label className="font-label-caps text-label-caps text-on-surface-variant">
-                  NIS (Nomor Induk Siswa) <span className="text-error">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: 102938"
-                  value={studentForm.nis}
-                  onChange={(e) =>
-                    setStudentForm((prev) => ({ ...prev, nis: e.target.value }))
-                  }
-                  className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
-                />
-              </div>
+            {/* Modal Actions */}
+            <div className="px-6 py-4 bg-surface-container-low border-t border-outline-variant flex items-center justify-end gap-sm">
+              <button
+                onClick={closeDeleteModal}
+                className="px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high rounded font-label-caps text-label-caps transition-colors active:scale-95 cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 bg-error text-on-error rounded font-label-caps text-label-caps shadow-sm hover:bg-error/95 transition-colors active:scale-95 flex items-center gap-xs cursor-pointer"
+              >
+                Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-              {/* Kelas Selection */}
-              <div className="flex flex-col gap-xs">
-                <label className="font-label-caps text-label-caps text-on-surface-variant">
-                  Kelas <span className="text-error">*</span>
-                </label>
-                <select
-                  required
-                  value={studentForm.class}
-                  onChange={(e) =>
-                    setStudentForm((prev) => ({ ...prev, class: e.target.value }))
-                  }
-                  className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
-                >
-                  <option value="7A">Kelas 7A</option>
-                  <option value="8C">Kelas 8C</option>
-                  <option value="9B">Kelas 9B</option>
-                </select>
-              </div>
+      {/* Reusable Edit Modal */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-surface w-[95%] sm:w-full max-w-2xl rounded-xl shadow-2xl border border-outline-variant overflow-hidden flex flex-col max-h-[90vh] animate-fade-in">
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-surface-container-low border-b border-outline-variant flex items-center justify-between">
+              <h2 className="font-h2 text-h2 text-on-surface font-semibold">Edit Data Siswa</h2>
+              <button
+                onClick={closeEditModal}
+                className="text-on-surface-variant hover:bg-surface-container-high p-2 rounded-full transition-all flex items-center justify-center active:scale-95 cursor-pointer"
+                aria-label="Close modal"
+                type="button"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
 
-              {/* Modal Actions */}
-              <div className="pt-4 border-t border-outline-variant flex items-center justify-end gap-sm">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high rounded font-label-caps text-label-caps transition-colors"
-                  disabled={isSubmitting}
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-primary text-on-primary rounded font-label-caps text-label-caps shadow-sm hover:bg-primary/95 transition-colors flex items-center gap-xs"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting && (
-                    <span className="material-symbols-outlined text-[16px] animate-spin">sync</span>
-                  )}
-                  {modalMode === "create" ? "Tambah Siswa" : "Simpan Perubahan"}
-                </button>
-              </div>
-            </form>
+            {/* Modal Content */}
+            <div className="p-6 flex-1 overflow-y-auto font-body-md text-body-md text-on-surface-variant">
+              <form id="editStudentForm" onSubmit={handleEditSubmit} className="space-y-4">
+                {/* Nama Lengkap */}
+                <div className="flex flex-col gap-xs">
+                  <label className="font-label-caps text-label-caps text-on-surface-variant">
+                    Nama Lengkap <span className="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: Ahmad Fauzi"
+                    value={studentForm.name}
+                    onChange={(e) =>
+                      setStudentForm((prev) => ({ ...prev, name: e.target.value }))
+                    }
+                    className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
+                  />
+                </div>
+
+                {/* NIS */}
+                <div className="flex flex-col gap-xs">
+                  <label className="font-label-caps text-label-caps text-on-surface-variant">
+                    NIS (Nomor Induk Siswa)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: 102938"
+                    value={studentForm.nis}
+                    onChange={(e) =>
+                      setStudentForm((prev) => ({ ...prev, nis: e.target.value }))
+                    }
+                    className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
+                  />
+                </div>
+
+                {/* Kelas Selection */}
+                <div className="flex flex-col gap-xs">
+                  <label className="font-label-caps text-label-caps text-on-surface-variant">
+                    Kelas <span className="text-error">*</span>
+                  </label>
+                  <select
+                    required
+                    value={studentForm.class}
+                    onChange={(e) =>
+                      setStudentForm((prev) => ({ ...prev, class: e.target.value }))
+                    }
+                    className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
+                  >
+                    <option value="7A">Kelas 7A</option>
+                    <option value="8C">Kelas 8C</option>
+                    <option value="9B">Kelas 9B</option>
+                    <option value="X-A">Kelas X - A</option>
+                    <option value="X-B">Kelas X - B</option>
+                    <option value="XI-A">Kelas XI - A</option>
+                    <option value="XI-B">Kelas XI - B</option>
+                    <option value="XII-A">Kelas XII - A</option>
+                    <option value="XII-B">Kelas XII - B</option>
+                  </select>
+                </div>
+              </form>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="px-6 py-4 bg-surface-container-low border-t border-outline-variant flex items-center justify-end gap-sm">
+              <button
+                onClick={closeEditModal}
+                className="px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high rounded font-label-caps text-label-caps transition-colors active:scale-95 cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                form="editStudentForm"
+                className="px-4 py-2 bg-primary text-on-primary rounded font-label-caps text-label-caps shadow-sm hover:bg-primary/95 transition-colors active:scale-95 cursor-pointer"
+              >
+                Simpan Perubahan
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 
+
 const initialDummyData = [
   {
     _rowNum: 1,
@@ -50,6 +51,10 @@ export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("create"); // "create" | "edit"
   const [selectedEntry, setSelectedEntry] = useState(null);
+
+  // Delete Modal States
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [entryToDelete, setEntryToDelete] = useState(null);
 
   // Form States
   const [dateInput, setDateInput] = useState("");
@@ -246,15 +251,24 @@ export default function Home() {
     }, 400);
   };
 
-  // Delete an entry locally
-  const handleDelete = async (entry) => {
-    if (!confirm(`Apakah Anda yakin ingin menghapus jurnal pada ${entry["Hari, tanggal"]}?`)) {
-      return;
-    }
-    const updated = entries.filter((e) => e._rowNum !== entry._rowNum);
+  // Open Jurnal Delete Confirmation Modal
+  const openDeleteModal = (entry) => {
+    setEntryToDelete(entry);
+    setIsDeleteModalOpen(true);
+  };
+
+  const closeDeleteModal = () => {
+    setIsDeleteModalOpen(false);
+    setEntryToDelete(null);
+  };
+
+  const confirmDelete = () => {
+    if (!entryToDelete) return;
+    const updated = entries.filter((e) => e._rowNum !== entryToDelete._rowNum);
     setEntries(updated);
     setParsedEntries(updated);
     showToast("Jurnal berhasil dihapus!", "success");
+    closeDeleteModal();
   };
 
   // Filter entries based on search
@@ -417,7 +431,7 @@ export default function Home() {
                       {renderKehadiranBadges(entry["Kehadiran"])}
                       <div className="flex gap-xs border-l border-outline-variant pl-sm ml-xs" onClick={(e) => e.stopPropagation()}>
                         <button
-                          onClick={() => handleDelete(entry)}
+                          onClick={() => openDeleteModal(entry)}
                           className="text-error hover:bg-error-container/20 p-1 rounded-full transition-colors flex items-center justify-center"
                           title="Hapus Jurnal"
                         >
@@ -431,8 +445,8 @@ export default function Home() {
             </div>
 
             {/* Desktop Data Table View (hidden md:block) */}
-            <div className="hidden md:block bg-surface border border-outline-variant rounded-lg overflow-hidden shadow-sm">
-              <table className="w-full text-left border-collapse">
+            <div className="hidden md:block bg-surface border border-outline-variant rounded-lg overflow-x-auto shadow-sm">
+              <table className="w-full text-left border-collapse min-w-[900px]">
                 <thead className="bg-surface-container-low border-b border-outline-variant">
                   <tr>
                     <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-16 text-center">
@@ -495,7 +509,7 @@ export default function Home() {
                             <span className="material-symbols-outlined text-[20px]">edit</span>
                           </button>
                           <button
-                            onClick={() => handleDelete(entry)}
+                            onClick={() => openDeleteModal(entry)}
                             className="text-error hover:bg-error-container/20 p-1 rounded-full active:opacity-80 transition-all"
                             title="Hapus Jurnal"
                           >
@@ -524,164 +538,219 @@ export default function Home() {
 
       {/* CRUD MODAL FORM */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-surface w-full max-w-lg rounded-lg shadow-2xl border border-outline-variant overflow-hidden transform scale-100 transition-all flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-surface w-[95%] sm:w-full max-w-2xl rounded-xl shadow-2xl border border-outline-variant overflow-hidden flex flex-col max-h-[90vh] animate-fade-in">
             {/* Modal Header */}
             <div className="px-6 py-4 bg-surface-container-low border-b border-outline-variant flex items-center justify-between">
-              <h2 className="font-h2 text-h2 text-on-surface">
+              <h2 className="font-h2 text-h2 text-on-surface font-semibold">
                 {modalMode === "create" ? "Tambah Jurnal Mengajar" : "Edit Jurnal Mengajar"}
               </h2>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="text-on-surface-variant hover:bg-surface-container-high p-2 rounded-full transition-all flex items-center justify-center"
+                className="text-on-surface-variant hover:bg-surface-container-high p-2 rounded-full transition-all flex items-center justify-center active:scale-95 cursor-pointer"
+                aria-label="Close modal"
+                type="button"
               >
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
 
-            {/* Modal Form */}
-            <form onSubmit={handleSubmit} className="p-6 flex-1 overflow-y-auto space-y-4">
-              {/* Date Helper Picker & Input */}
-              <div className="flex flex-col gap-xs">
-                <label className="font-label-caps text-label-caps text-on-surface-variant">
-                  Hari, tanggal <span className="text-error">*</span>
-                </label>
-                <div className="flex gap-gutter">
-                  <input
-                    type="date"
-                    value={dateInput}
-                    onChange={handleDateChange}
-                    className="bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
-                  />
-                  <input
-                    type="text"
-                    required
-                    placeholder="Contoh: Senin, 12 Okt 2023"
-                    value={formData["Hari, tanggal"]}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, "Hari, tanggal": e.target.value }))
-                    }
-                    className="flex-grow bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
-                  />
+            {/* Modal Content */}
+            <div className="p-6 flex-1 overflow-y-auto font-body-md text-body-md text-on-surface-variant">
+              <form id="jurnalForm" onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Date Helper Picker & Input */}
+                  <div className="flex flex-col gap-xs md:col-span-2">
+                    <label className="font-label-caps text-label-caps text-on-surface-variant">
+                      Hari, tanggal <span className="text-error">*</span>
+                    </label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="date"
+                        value={dateInput}
+                        onChange={handleDateChange}
+                        className="bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md w-full sm:w-auto"
+                      />
+                      <input
+                        type="text"
+                        required
+                        placeholder="Contoh: Senin, 12 Okt 2023"
+                        value={formData["Hari, tanggal"]}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, "Hari, tanggal": e.target.value }))
+                        }
+                        className="flex-grow bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
+                      />
+                    </div>
+                    <p className="font-caption text-caption text-on-surface-variant mt-1">
+                      Pilih penanggalan tanggal di sebelah kiri untuk otomatisasi hari, atau ketik langsung di kolom teks.
+                    </p>
+                  </div>
+
+                  {/* Jam Ke- */}
+                  <div className="flex flex-col gap-xs">
+                    <label className="font-label-caps text-label-caps text-on-surface-variant">
+                      Jam ke-
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: 1-2, atau 3-4"
+                      value={formData["Jam ke-"]}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, "Jam ke-": e.target.value }))
+                      }
+                      className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
+                    />
+                  </div>
+
+                  {/* Kelas Selection */}
+                  <div className="flex flex-col gap-xs">
+                    <label className="font-label-caps text-label-caps text-on-surface-variant">
+                      Kelas <span className="text-error">*</span>
+                    </label>
+                    <select
+                      required
+                      value={formData["Kelas"]}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, "Kelas": e.target.value }))
+                      }
+                      className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
+                    >
+                      <option value="7A">Kelas 7A</option>
+                      <option value="7B">Kelas 7B</option>
+                      <option value="7C">Kelas 7C</option>
+                      <option value="7D">Kelas 7D</option>
+                      <option value="8A">Kelas 8A</option>
+                      <option value="8C">Kelas 8C</option>
+                      <option value="9A">Kelas 9A</option>
+                    </select>
+                  </div>
+
+                  {/* Kehadiran */}
+                  <div className="flex flex-col gap-xs md:col-span-2">
+                    <label className="font-label-caps text-label-caps text-on-surface-variant">
+                      Kehadiran
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: H:30, A:2 (atau 30 Hadir, 2 Alpa)"
+                      value={formData["Kehadiran"]}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, "Kehadiran": e.target.value }))
+                      }
+                      className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
+                    />
+                    <p className="font-caption text-caption text-on-surface-variant mt-1">
+                      Format disarankan: `H:30, A:2` (untuk memicu indikator kehadiran berwarna).
+                    </p>
+                  </div>
+
+                  {/* Materi Pokok */}
+                  <div className="flex flex-col gap-xs md:col-span-2">
+                    <label className="font-label-caps text-label-caps text-on-surface-variant">
+                      Materi Pokok <span className="text-error">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Contoh: Aljabar Linier Dasar"
+                      value={formData["Materi Pokok"]}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, "Materi Pokok": e.target.value }))
+                      }
+                      className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
+                    />
+                  </div>
+
+                  {/* Kegiatan Pembelajaran */}
+                  <div className="flex flex-col gap-xs md:col-span-2">
+                    <label className="font-label-caps text-label-caps text-on-surface-variant">
+                      Kegiatan Pembelajaran
+                    </label>
+                    <textarea
+                      rows={3}
+                      placeholder="Deskripsikan aktivitas pengajaran di kelas..."
+                      value={formData["Kegiatan Pembelajaran"]}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, "Kegiatan Pembelajaran": e.target.value }))
+                      }
+                      className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md resize-none"
+                    />
+                  </div>
                 </div>
-                <p className="font-caption text-caption text-on-surface-variant mt-1">
-                  Pilih penanggalan tanggal di sebelah kiri untuk otomatisasi hari, atau ketik langsung di kolom teks.
+              </form>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="px-6 py-4 bg-surface-container-low border-t border-outline-variant flex items-center justify-end gap-sm">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high rounded font-label-caps text-label-caps transition-colors cursor-pointer"
+                disabled={isSubmitting}
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                form="jurnalForm"
+                className="px-4 py-2 bg-primary text-on-primary rounded font-label-caps text-label-caps shadow-sm hover:bg-primary/95 transition-colors flex items-center gap-xs cursor-pointer"
+                disabled={isSubmitting}
+              >
+                {isSubmitting && (
+                  <span className="material-symbols-outlined text-[16px] animate-spin">sync</span>
+                )}
+                {modalMode === "create" ? "Simpan Jurnal" : "Simpan Perubahan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-surface w-[95%] sm:w-full max-w-2xl rounded-xl shadow-2xl border border-outline-variant overflow-hidden flex flex-col max-h-[90vh] animate-fade-in">
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-surface-container-low border-b border-outline-variant flex items-center justify-between">
+              <h2 className="font-h2 text-h2 text-on-surface font-semibold">Hapus Catatan Jurnal</h2>
+              <button
+                onClick={closeDeleteModal}
+                className="text-on-surface-variant hover:bg-surface-container-high p-2 rounded-full transition-all flex items-center justify-center active:scale-95 cursor-pointer"
+                aria-label="Close modal"
+                type="button"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 flex-1 overflow-y-auto font-body-md text-body-md text-on-surface">
+              <p className="font-body-lg text-body-lg font-semibold">
+                Apakah Anda yakin ingin menghapus catatan jurnal ini?
+              </p>
+              {entryToDelete && (
+                <p className="font-body-md text-body-md text-on-surface-variant mt-2">
+                  Catatan jurnal materi <strong className="text-on-surface">{entryToDelete["Materi Pokok"]}</strong> pada tanggal <strong className="text-on-surface">{entryToDelete["Hari, tanggal"]}</strong> akan dihapus secara permanen.
                 </p>
-              </div>
+              )}
+            </div>
 
-              {/* Jam Ke- */}
-              <div className="flex flex-col gap-xs">
-                <label className="font-label-caps text-label-caps text-on-surface-variant">
-                  Jam ke-
-                </label>
-                <input
-                  type="text"
-                  placeholder="Contoh: 1-2, atau 3-4"
-                  value={formData["Jam ke-"]}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, "Jam ke-": e.target.value }))
-                  }
-                  className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
-                />
-              </div>
-
-              {/* Kelas Selection */}
-              <div className="flex flex-col gap-xs">
-                <label className="font-label-caps text-label-caps text-on-surface-variant">
-                  Kelas <span className="text-error">*</span>
-                </label>
-                <select
-                  required
-                  value={formData["Kelas"]}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, "Kelas": e.target.value }))
-                  }
-                  className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
-                >
-                  <option value="7A">Kelas 7A</option>
-                  <option value="7B">Kelas 7B</option>
-                  <option value="7C">Kelas 7C</option>
-                  <option value="7D">Kelas 7D</option>
-                  <option value="8A">Kelas 8A</option>
-                  <option value="8C">Kelas 8C</option>
-                  <option value="9A">Kelas 9A</option>
-                </select>
-              </div>
-
-              {/* Materi Pokok */}
-              <div className="flex flex-col gap-xs">
-                <label className="font-label-caps text-label-caps text-on-surface-variant">
-                  Materi Pokok <span className="text-error">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: Aljabar Linier Dasar"
-                  value={formData["Materi Pokok"]}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, "Materi Pokok": e.target.value }))
-                  }
-                  className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
-                />
-              </div>
-
-              {/* Kegiatan Pembelajaran */}
-              <div className="flex flex-col gap-xs">
-                <label className="font-label-caps text-label-caps text-on-surface-variant">
-                  Kegiatan Pembelajaran
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="Deskripsikan aktivitas pengajaran di kelas..."
-                  value={formData["Kegiatan Pembelajaran"]}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, "Kegiatan Pembelajaran": e.target.value }))
-                  }
-                  className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md resize-none"
-                />
-              </div>
-
-              {/* Kehadiran */}
-              <div className="flex flex-col gap-xs">
-                <label className="font-label-caps text-label-caps text-on-surface-variant">
-                  Kehadiran
-                </label>
-                <input
-                  type="text"
-                  placeholder="Contoh: H:30, A:2 (atau 30 Hadir, 2 Alpa)"
-                  value={formData["Kehadiran"]}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, "Kehadiran": e.target.value }))
-                  }
-                  className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
-                />
-                <p className="font-caption text-caption text-on-surface-variant mt-1">
-                  Format disarankan: `H:30, A:2` (untuk memicu indikator kehadiran berwarna).
-                </p>
-              </div>
-
-              {/* Modal Actions */}
-              <div className="pt-4 border-t border-outline-variant flex items-center justify-end gap-sm">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high rounded font-label-caps text-label-caps transition-colors"
-                  disabled={isSubmitting}
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-primary text-on-primary rounded font-label-caps text-label-caps shadow-sm hover:bg-primary/95 transition-colors flex items-center gap-xs"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting && (
-                    <span className="material-symbols-outlined text-[16px] animate-spin">sync</span>
-                  )}
-                  {modalMode === "create" ? "Simpan Jurnal" : "Simpan Perubahan"}
-                </button>
-              </div>
-            </form>
+            {/* Modal Actions */}
+            <div className="px-6 py-4 bg-surface-container-low border-t border-outline-variant flex items-center justify-end gap-sm">
+              <button
+                onClick={closeDeleteModal}
+                className="px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high rounded font-label-caps text-label-caps transition-colors active:scale-95 cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 bg-error text-on-error rounded font-label-caps text-label-caps shadow-sm hover:bg-error/95 transition-colors active:scale-95 flex items-center gap-xs cursor-pointer"
+              >
+                Hapus
+              </button>
+            </div>
           </div>
         </div>
       )}
