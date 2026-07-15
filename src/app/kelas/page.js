@@ -3,11 +3,10 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 
-
 const initialClasses = [
-  { id: 1, code: "7A", name: "Kelas VII A", type: "IPA", studentCount: 32 },
-  { id: 2, code: "8C", name: "Kelas VIII C", type: "IPS", studentCount: 30 },
-  { id: 3, code: "9B", name: "Kelas IX B", type: "BHS", studentCount: 28 }
+  { id: 1, code: "7A", name: "Kelas VII A", type: "SMP", studentCount: 32 },
+  { id: 2, code: "8C", name: "Kelas VIII C", type: "SMP", studentCount: 30 },
+  { id: 3, code: "9B", name: "Kelas IX B", type: "SMP", studentCount: 28 }
 ];
 
 export default function KelasPage() {
@@ -21,21 +20,66 @@ export default function KelasPage() {
   const [classForm, setClassForm] = useState({
     code: "",
     name: "",
-    type: "IPA",
+    type: "SMP",
     studentCount: 0
   });
 
-  // Toast notifications
+  // Toast notifications (2-second timeout as requested)
   const [toast, setToast] = useState(null);
   const showToast = (message, type = "success") => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
+    setTimeout(() => setToast(null), 2000);
   };
 
-  // Load classes on mount
+  // Load classes dynamically from local storage on mount
   useEffect(() => {
     const timer = setTimeout(() => {
-      setClasses(initialClasses);
+      const storedClasses = localStorage.getItem("daftar_kelas");
+      const storedStudents = localStorage.getItem("daftar_siswa");
+      
+      let classesList = [];
+      let studentsList = [];
+      
+      if (storedStudents) {
+        try {
+          studentsList = JSON.parse(storedStudents).filter(s => !s.isDeleted);
+        } catch (e) {
+          console.error("Failed to parse stored students", e);
+        }
+      }
+      
+      if (storedClasses) {
+        try {
+          const parsed = JSON.parse(storedClasses);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            classesList = parsed.map((code, index) => {
+              const count = studentsList.filter(s => s.class === code).length;
+              return {
+                id: index + 1,
+                code: code,
+                name: `Kelas ${code}`,
+                type: code.startsWith("X") || code.startsWith("XI") || code.startsWith("XII") ? "SMA" : "SMP",
+                studentCount: count
+              };
+            });
+          }
+        } catch (e) {
+          console.error("Failed to parse stored classes", e);
+        }
+      }
+      
+      // Fallback to initialClasses if no dynamic classes exist
+      if (classesList.length === 0) {
+        classesList = initialClasses.map((c) => {
+          const count = studentsList.filter(s => s.class === c.code).length;
+          return {
+            ...c,
+            studentCount: count || 0
+          };
+        });
+      }
+      
+      setClasses(classesList);
       setIsLoading(false);
     }, 500);
     return () => clearTimeout(timer);
@@ -57,7 +101,7 @@ export default function KelasPage() {
     setClassForm({
       code: "",
       name: "",
-      type: "IPA",
+      type: "SMP",
       studentCount: 0
     });
     setIsModalOpen(true);
@@ -72,14 +116,23 @@ export default function KelasPage() {
 
     setIsSubmitting(true);
     setTimeout(() => {
+      const codeUpper = classForm.code.toUpperCase().trim();
       const newClass = {
         id: classes.length > 0 ? Math.max(...classes.map(c => c.id)) + 1 : 1,
-        code: classForm.code.toUpperCase(),
-        name: classForm.name,
+        code: codeUpper,
+        name: classForm.name.trim(),
         type: classForm.type,
         studentCount: classForm.studentCount || 0
       };
-      setClasses((prev) => [...prev, newClass]);
+      
+      // Append locally
+      const updatedClasses = [...classes, newClass];
+      setClasses(updatedClasses);
+      
+      // Store class list codes to localstorage
+      const codes = updatedClasses.map(c => c.code);
+      localStorage.setItem("daftar_kelas", JSON.stringify(codes));
+      
       showToast("Kelas baru berhasil ditambahkan!");
       setIsModalOpen(false);
       setIsSubmitting(false);
@@ -114,7 +167,7 @@ export default function KelasPage() {
             </span>
             <input
               className="w-full pl-10 pr-4 py-2 bg-surface border border-outline-variant rounded-full font-body-md text-body-md focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-              placeholder="Cari kelas atau jurusan..."
+              placeholder="Cari kelas..."
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -179,7 +232,7 @@ export default function KelasPage() {
                   </div>
                   <div className="font-body-md text-body-md text-on-surface-variant flex items-center gap-2 mt-auto pt-4 border-t border-surface-container-high">
                     <span className="material-symbols-outlined text-[18px]">groups</span>
-                    <span>{c.studentCount} Siswa</span>
+                    <span>{c.studentCount} Siswa Aktif</span>
                   </div>
                 </Link>
               );
@@ -264,9 +317,8 @@ export default function KelasPage() {
                       }
                       className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
                     >
-                      <option value="IPA">IPA (Ilmu Pengetahuan Alam)</option>
-                      <option value="IPS">IPS (Ilmu Pengetahuan Sosial)</option>
-                      <option value="BHS">BHS (Bahasa)</option>
+                      <option value="SMP">SMP (Sekolah Menengah Pertama)</option>
+                      <option value="SMA">SMA (Sekolah Menengah Atas)</option>
                       <option value="UMUM">UMUM / Lainnya</option>
                     </select>
                   </div>

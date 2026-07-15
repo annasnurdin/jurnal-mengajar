@@ -5,12 +5,12 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
 const initialStudents = [
-  { id: 1234, name: "Annas", class: "7A", nis: "1234" },
-  { id: 2345, name: "Ilma", class: "7A", nis: "2345" },
-  { id: 3456, name: "Purwo", class: "7B", nis: "3456" },
-  { id: 4567, name: "Karin", class: "7B", nis: "4567" },
-  { id: 5678, name: "Soleh", class: "7C", nis: "5678" },
-  { id: 6789, name: "Rido", class: "7D", nis: "6789" }
+  { id: "1234", name: "Annas", class: "7A", nis: "1234" },
+  { id: "2345", name: "Ilma", class: "7A", nis: "2345" },
+  { id: "3456", name: "Purwo", class: "7B", nis: "3456" },
+  { id: "4567", name: "Karin", class: "7B", nis: "4567" },
+  { id: "5678", name: "Soleh", class: "7C", nis: "5678" },
+  { id: "6789", name: "Rido", class: "7D", nis: "6789" }
 ];
 
 function SiswaContent() {
@@ -54,11 +54,11 @@ function SiswaContent() {
     class: "7A"
   });
 
-  // Toast Alerts
+  // Toast Alerts (2-second timeout as requested)
   const [toast, setToast] = useState(null);
   const showToast = (message, type = "success") => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
+    setTimeout(() => setToast(null), 2000);
   };
 
   // Helper: Fetch students from sheet
@@ -68,14 +68,23 @@ function SiswaContent() {
       const res = await fetch("/api/siswa");
       if (!res.ok) throw new Error("Failed to fetch students from Apps Script");
       const result = await res.json();
+      console.log("Raw sheet data fetched:", result.data);
       if (result.data) {
-        const mapped = result.data.map((item) => ({
-          id: item.ID || item._rowNum,
-          name: item["Nama Siswa"] || "",
-          class: item["Kelas"] || "",
-          nis: item.ID ? item.ID.toString() : "",
-          _rowNum: item._rowNum
-        }));
+        // Map NIS from sheet to local fields, fallback to alternate headers
+        const mapped = result.data.map((item) => {
+          const rawNis = item.NIS !== undefined ? item.NIS :
+                         item.nis !== undefined ? item.nis :
+                         item.Nis !== undefined ? item.Nis :
+                         item.ID !== undefined ? item.ID :
+                         item.id !== undefined ? item.id : "";
+          return {
+            id: rawNis || item._rowNum,
+            name: item["Nama Siswa"] || "",
+            class: item["Kelas"] || "",
+            nis: rawNis.toString().trim(),
+            _rowNum: item._rowNum
+          };
+        });
         localStorage.setItem("daftar_siswa", JSON.stringify(mapped));
         setStudents(mapped);
         if (showSuccessToast) {
@@ -97,9 +106,30 @@ function SiswaContent() {
     }
   }, []);
 
-  // Load students data on mount if empty
+  // Load students data on mount, run schema migration, or fetch from sheet
   useEffect(() => {
     const timer = setTimeout(() => {
+      const stored = localStorage.getItem("daftar_siswa");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          let changed = false;
+          const migrated = parsed.map((s) => {
+            if ((!s.nis || s.nis === "") && (s.id || s.ID)) {
+              s.nis = (s.id || s.ID).toString();
+              changed = true;
+            }
+            return s;
+          });
+          if (changed) {
+            localStorage.setItem("daftar_siswa", JSON.stringify(migrated));
+            setStudents(migrated);
+          }
+        } catch (e) {
+          console.error("Migration error:", e);
+        }
+      }
+
       if (students.length === 0) {
         fetchSiswaFromSheet();
       } else {
@@ -119,9 +149,20 @@ function SiswaContent() {
     }
   }, [kelasParam]);
 
-  // Extract unique classes dynamically
+  // Extract unique classes dynamically and cache in localStorage
+  useEffect(() => {
+    const active = students.filter((s) => !s.isDeleted && s.class).map((s) => s.class);
+    const unique = [...new Set(active)].sort();
+    if (unique.length > 0) {
+      localStorage.setItem("daftar_kelas", JSON.stringify(unique));
+    }
+  }, [students]);
+
   const activeStudents = students.filter((s) => !s.isDeleted);
-  const availableClasses = ["Semua Kelas", ...new Set(activeStudents.map((s) => s.class).filter(Boolean))].sort();
+  
+  // Compute class list dynamically on render
+  const classesList = [...new Set(activeStudents.map((s) => s.class).filter(Boolean))].sort();
+  const availableClasses = ["Semua Kelas", ...classesList];
 
   // Determine active class filter dynamically
   const activeClassFilter = (selectedClassFilter !== "Semua Kelas" && availableClasses.includes(selectedClassFilter))
@@ -235,7 +276,7 @@ function SiswaContent() {
           body: JSON.stringify({
             id: student._rowNum,
             data: {
-              "ID": student.nis || student.id.toString(),
+              "NIS": student.nis || student.id.toString(),
               "Nama Siswa": student.name,
               "Kelas": student.class,
             },
@@ -253,7 +294,7 @@ function SiswaContent() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            "ID": student.nis || student.id.toString(),
+            "NIS": student.nis || student.id.toString(),
             "Nama Siswa": student.name,
             "Kelas": student.class,
           }),
@@ -374,35 +415,38 @@ function SiswaContent() {
                   className="bg-surface border border-outline-variant hover:border-primary p-4 rounded-xl flex items-center justify-between transition-colors cursor-pointer animate-fade-in"
                   onClick={() => openEditModal(student)}
                 >
-                  <div className="flex items-center gap-4">
+                  {/* min-w-0 on parent allows text truncation inside flex child */}
+                  <div className="flex items-center gap-4 min-w-0 flex-grow mr-2">
                     <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center font-h3 text-h3 ${avatarBg}`}
+                      className={`w-10 h-10 rounded-full flex items-center justify-center font-h3 text-h3 flex-shrink-0 ${avatarBg}`}
                     >
                       {initialLetter}
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-h3 text-h3 text-on-surface">{student.name}</h3>
+                    {/* min-w-0 triggers text truncation */}
+                    <div className="min-w-0 flex-grow">
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        <h3 className="font-h3 text-h3 text-on-surface truncate max-w-full">{student.name}</h3>
                         {student.isNew && (
-                          <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 rounded-full font-bold animate-pulse">Lokal</span>
+                          <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 rounded-full font-bold flex-shrink-0">Lokal</span>
                         )}
                         {student.isUpdated && (
-                          <span className="bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 rounded-full font-bold">Diedit</span>
+                          <span className="bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 rounded-full font-bold flex-shrink-0">Diedit</span>
                         )}
                       </div>
-                      <div className="flex gap-3 text-on-surface-variant font-caption text-caption mt-1">
+                      <div className="flex gap-x-3 gap-y-1 text-on-surface-variant font-caption text-caption mt-1 flex-wrap min-w-0">
                         {student.nis && (
-                          <span className="flex items-center gap-1">
-                            <span className="material-symbols-outlined text-[14px]">badge</span> {student.nis}
+                          <span className="flex items-center gap-1 min-w-0 truncate max-w-[200px]">
+                            <span className="material-symbols-outlined text-[14px]">badge</span> 
+                            <span className="truncate break-all" title={student.nis}>{student.nis}</span>
                           </span>
                         )}
-                        <span className="flex items-center gap-1">
+                        <span className="flex items-center gap-1 flex-shrink-0">
                           <span className="material-symbols-outlined text-[14px]">class</span> Kelas {student.class}
                         </span>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                     <button
                       aria-label="Edit"
                       onClick={() => openEditModal(student)}
@@ -541,19 +585,16 @@ function SiswaContent() {
                   />
                 </div>
 
-                {/* NIS */}
+                {/* NIS (Disabled during Edit) */}
                 <div className="flex flex-col gap-xs">
                   <label className="font-label-caps text-label-caps text-on-surface-variant">
                     NIS (Nomor Induk Siswa)
                   </label>
                   <input
                     type="text"
-                    placeholder="Contoh: 102938"
-                    value={studentForm.nis}
-                    onChange={(e) =>
-                      setStudentForm((prev) => ({ ...prev, nis: e.target.value }))
-                    }
-                    className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
+                    disabled
+                    value={studentForm.nis || ""}
+                    className="w-full bg-surface-container border border-outline rounded p-2 text-on-surface-variant focus:outline-none transition-all font-body-md cursor-not-allowed opacity-75"
                   />
                 </div>
 
@@ -570,21 +611,11 @@ function SiswaContent() {
                     }
                     className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
                   >
-                    <option value="7A">Kelas 7A</option>
-                    <option value="7B">Kelas 7B</option>
-                    <option value="7C">Kelas 7C</option>
-                    <option value="7D">Kelas 7D</option>
-                    <option value="8A">Kelas 8A</option>
-                    <option value="8B">Kelas 8B</option>
-                    <option value="8C">Kelas 8C</option>
-                    <option value="9A">Kelas 9A</option>
-                    <option value="9B">Kelas 9B</option>
-                    <option value="X-A">Kelas X - A</option>
-                    <option value="X-B">Kelas X - B</option>
-                    <option value="XI-A">Kelas XI - A</option>
-                    <option value="XI-B">Kelas XI - B</option>
-                    <option value="XII-A">Kelas XII - A</option>
-                    <option value="XII-B">Kelas XII - B</option>
+                    {classesList.map((c) => (
+                      <option key={c} value={c}>
+                        Kelas {c}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </form>

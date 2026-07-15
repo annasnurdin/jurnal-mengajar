@@ -73,7 +73,7 @@ export default function Home() {
   // Show toast utility
   const showToast = (message, type = "success") => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
+    setTimeout(() => setToast(null), 2000);
   };
 
   // Format Date to "Hari, tanggal" (Indonesian)
