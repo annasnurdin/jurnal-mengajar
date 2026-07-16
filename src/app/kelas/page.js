@@ -158,7 +158,7 @@ export default function KelasPage() {
           <div>
             <h2 className="font-display text-display text-primary">Daftar Kelas</h2>
             <p className="font-body-md text-body-md text-on-surface-variant mt-1">
-              Kelola kelas dan wali kelas tahun ajaran ini. Klik kelas untuk melihat daftar siswa.
+              Kelola kelas dan wali kelas tahun ajaran ini. Klik kelas untuk mulai melakukan presensi.
             </p>
           </div>
           <div className="relative w-full md:w-72">
@@ -214,7 +214,7 @@ export default function KelasPage() {
               return (
                 <Link
                   key={c.id}
-                  href={`/siswa?kelas=${c.code}`}
+                  href={`/presensi?kelas=${c.code}`}
                   className="bg-surface rounded-xl border border-outline-variant p-4 hover:border-primary transition-colors cursor-pointer group flex flex-col justify-between"
                 >
                   <div>

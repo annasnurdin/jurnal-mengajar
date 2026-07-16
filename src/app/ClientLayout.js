@@ -15,7 +15,7 @@ export default function ClientLayout({ children }) {
 
   const isJurnalActive = pathname === "/";
   const isSiswaActive = pathname.startsWith("/siswa");
-  const isKelasActive = pathname.startsWith("/kelas");
+  const isKelasActive = pathname.startsWith("/kelas") || pathname.startsWith("/presensi");
   const isManajemenActive = pathname === "/manajemen";
 
   const isTambahSiswa = pathname === "/siswa/tambah-siswa";
@@ -90,17 +90,7 @@ export default function ClientLayout({ children }) {
             <span className={`material-symbols-outlined ${isJurnalActive ? "icon-fill" : ""}`}>history_edu</span>
             <span className="font-body-md text-body-md">Dashboard</span>
           </Link>
-          <Link
-            href="/siswa"
-            className={`flex items-center gap-3 mx-2 px-4 py-3 rounded-full transition-all duration-200 ${
-              isSiswaActive
-                ? "bg-primary-container text-on-primary-container font-bold"
-                : "text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface"
-            }`}
-          >
-            <span className={`material-symbols-outlined ${isSiswaActive ? "icon-fill" : ""}`}>groups</span>
-            <span className="font-body-md text-body-md">Siswa</span>
-          </Link>
+
           <Link
             href="/kelas"
             className={`flex items-center gap-3 mx-2 px-4 py-3 rounded-full transition-all duration-200 ${
@@ -153,22 +143,7 @@ export default function ClientLayout({ children }) {
           </Link>
 
           {/* Tab Siswa */}
-          <Link
-            href="/siswa"
-            className="flex flex-col items-center justify-center w-16 h-full font-label-caps text-label-caps"
-          >
-            {isSiswaActive ? (
-              <div className="bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 scale-95 active:scale-90 transition-transform font-semibold flex flex-col items-center justify-center">
-                <span className="material-symbols-outlined icon-fill">groups</span>
-                <span className="text-[10px] mt-0.5">Siswa</span>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-transform scale-95 active:scale-90">
-                <span className="material-symbols-outlined mb-1">groups</span>
-                <span>Siswa</span>
-              </div>
-            )}
-          </Link>
+
 
           {/* Tab Kelas */}
           <Link
