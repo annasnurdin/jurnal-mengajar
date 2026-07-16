@@ -276,7 +276,7 @@ function PresensiContent() {
     localStorage.setItem("riwayat_presensi", JSON.stringify(updatedRiwayat));
     
     showToast(`Presensi kelas ${kelasParam} berhasil disimpan!`);
-    setViewMode("history");
+    router.push("/rekap-presensi");
   };
 
   // Sync Record Simulation
@@ -1017,10 +1017,6 @@ function PresensiContent() {
         )}
       </main>
 
-      {/* Viewport lock to prevent zooming/pinching and shifting on mobile */}
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-      </head>
 
       {/* Style block for mobile slide-up animations and touch viewport locking */}
       <style dangerouslySetInnerHTML={{__html: `
