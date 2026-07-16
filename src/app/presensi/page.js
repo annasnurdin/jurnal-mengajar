@@ -234,18 +234,11 @@ function PresensiContent() {
 
   // Save Attendance to LocalStorage
   const handleSaveAttendance = () => {
-    const countStats = {
-      hadir: 0,
-      sakit: 0,
-      izin: 0,
-      alpa: 0,
-      bolos: 0
-    };
-
+    const countStats = { hadir: 0, sakit: 0, izin: 0, alpa: 0, bolos: 0 };
     const details = classStudents.map(student => {
       const studentId = student.id || student.nis;
       const status = attendance[studentId] || "Hadir";
-      
+
       if (status === "Hadir") countStats.hadir++;
       else if (status === "Sakit") countStats.sakit++;
       else if (status === "Izin") countStats.izin++;
@@ -260,20 +253,57 @@ function PresensiContent() {
       };
     });
 
-    const newRecord = {
-      id: "presensi_" + Date.now(),
+    const newClassRecord = {
       kelas: kelasParam,
-      tanggal: todayStr,
-      timestamp: Date.now(),
       totalSiswa: classStudents.length,
       rekap: countStats,
-      siswaDetail: details,
-      synced: false
+      siswaDetail: details
     };
 
-    const updatedRiwayat = [newRecord, ...riwayat];
-    setRiwayat(updatedRiwayat);
-    localStorage.setItem("riwayat_presensi", JSON.stringify(updatedRiwayat));
+    // Load existing records from localStorage
+    let currentRiwayat = [];
+    const storedRiwayat = localStorage.getItem("riwayat_presensi");
+    if (storedRiwayat) {
+      try {
+        const parsed = JSON.parse(storedRiwayat);
+        if (Array.isArray(parsed)) {
+          currentRiwayat = parsed;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // Find if today's record exists
+    const todayIndex = currentRiwayat.findIndex(r => r.tanggal === todayStr);
+
+    if (todayIndex !== -1) {
+      const todayRecord = currentRiwayat[todayIndex];
+      const updatedClasses = [...(todayRecord.classesList || [])];
+      
+      const classIdx = updatedClasses.findIndex(c => c.kelas === kelasParam);
+      if (classIdx !== -1) {
+        updatedClasses[classIdx] = newClassRecord;
+      } else {
+        updatedClasses.push(newClassRecord);
+      }
+
+      currentRiwayat[todayIndex] = {
+        ...todayRecord,
+        classesList: updatedClasses,
+        synced: false
+      };
+    } else {
+      const newDailyRecord = {
+        id: "day_" + Date.now(),
+        tanggal: todayStr,
+        classesList: [newClassRecord],
+        synced: false
+      };
+      currentRiwayat = [newDailyRecord, ...currentRiwayat];
+    }
+
+    localStorage.setItem("riwayat_presensi", JSON.stringify(currentRiwayat));
     
     showToast(`Presensi kelas ${kelasParam} berhasil disimpan!`);
     router.push("/rekap-presensi");
