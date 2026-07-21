@@ -4,15 +4,6 @@ import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
-const initialStudents = [
-  { id: "1234", name: "Annas", class: "7A", nis: "1234" },
-  { id: "2345", name: "Ilma", class: "7A", nis: "2345" },
-  { id: "3456", name: "Purwo", class: "7B", nis: "3456" },
-  { id: "4567", name: "Karin", class: "7B", nis: "4567" },
-  { id: "5678", name: "Soleh", class: "7C", nis: "5678" },
-  { id: "6789", name: "Rido", class: "7D", nis: "6789" }
-];
-
 function SiswaContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -98,8 +89,8 @@ function SiswaContent() {
       // Seed with initial students if localStorage is empty
       const stored = localStorage.getItem("daftar_siswa");
       if (!stored) {
-        localStorage.setItem("daftar_siswa", JSON.stringify(initialStudents));
-        setStudents(initialStudents);
+        localStorage.setItem("daftar_siswa", JSON.stringify([]));
+        setStudents([]);
       }
     } finally {
       setIsLoading(false);
