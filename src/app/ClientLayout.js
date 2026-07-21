@@ -53,6 +53,12 @@ export default function ClientLayout({ children }) {
   };
 
   useEffect(() => {
+    const storedSiswa = localStorage.getItem("daftar_siswa");
+    const storedPresensi = localStorage.getItem("riwayat_presensi");
+    if (storedSiswa && storedPresensi) {
+      setIsInitializing(false);
+    }
+
     const initializeData = async () => {
       try {
         const storedSiswa = localStorage.getItem("daftar_siswa");
@@ -164,6 +170,63 @@ export default function ClientLayout({ children }) {
     );
   }
 
+  const handleManualSync = async () => {
+    showToast("Sinkronisasi data dari Google Sheet...", "info");
+    try {
+      const [resSiswa, resPresensi] = await Promise.all([
+        fetch("/api/siswa").catch(() => null),
+        fetch("/api/presensi").catch(() => null)
+      ]);
+
+      let mappedSiswa = [];
+      if (resSiswa && resSiswa.ok) {
+        const dataSiswa = await resSiswa.json().catch(() => ({}));
+        if (dataSiswa && Array.isArray(dataSiswa.data)) {
+          mappedSiswa = dataSiswa.data.map((item) => {
+            const rawNis = item.NIS !== undefined ? item.NIS :
+                           item.nis !== undefined ? item.nis :
+                           item.Nis !== undefined ? item.Nis :
+                           item.ID !== undefined ? item.ID :
+                           item.id !== undefined ? item.id : "";
+            return {
+              id: rawNis || item._rowNum,
+              name: item["Nama Siswa"] || "",
+              class: item["Kelas"] || "",
+              nis: rawNis.toString().trim(),
+              _rowNum: item._rowNum
+            };
+          });
+        }
+      }
+
+      let mappedPresensi = [];
+      if (resPresensi && resPresensi.ok) {
+        const dataPresensi = await resPresensi.json().catch(() => ({}));
+        if (dataPresensi && Array.isArray(dataPresensi.data)) {
+          mappedPresensi = dataPresensi.data.map((item, idx) => ({
+            id: `sheet_day_${idx}_${Date.now()}`,
+            tanggal: item.Tanggal,
+            classesList: parseKehadiranString(item.Kehadiran),
+            synced: true
+          }));
+        }
+      }
+
+      localStorage.setItem("daftar_siswa", JSON.stringify(mappedSiswa));
+      localStorage.setItem("riwayat_presensi", JSON.stringify(mappedPresensi));
+      
+      const active = mappedSiswa.filter((s) => s.class).map((s) => s.class);
+      const unique = [...new Set(active)].sort();
+      localStorage.setItem("daftar_kelas", JSON.stringify(unique));
+
+      showToast("Sinkronisasi selesai! Memuat ulang halaman...", "success");
+      setTimeout(() => window.location.reload(), 1000);
+    } catch (e) {
+      console.error(e);
+      showToast("Sinkronisasi gagal!", "error");
+    }
+  };
+
   return (
     <div className={`min-h-screen flex flex-col pt-16 ${isTambahSiswa ? "pb-0" : "pb-20"} md:pb-0 md:pl-72 bg-background text-on-background`}>
       {/* Toast Notification */}
@@ -196,14 +259,23 @@ export default function ClientLayout({ children }) {
             <span className="hidden md:inline">Jurnal Mengajar</span>
           </h1>
         </div>
-        {(!isTambahSiswa || true) && (
+        <div className="flex items-center gap-1">
           <button
-            onClick={() => showToast("Fitur Pencarian Aktif!", "info")}
-            className={`${isTambahSiswa ? "hidden md:flex" : "flex"} text-primary hover:bg-surface-container-high transition-colors p-2 rounded-full items-center justify-center`}
+            onClick={handleManualSync}
+            className="text-primary hover:bg-surface-container-high transition-colors p-2 rounded-full flex items-center justify-center"
+            title="Sinkronisasi Manual"
           >
-            <span className="material-symbols-outlined">search</span>
+            <span className="material-symbols-outlined">sync</span>
           </button>
-        )}
+          {(!isTambahSiswa || true) && (
+            <button
+              onClick={() => showToast("Fitur Pencarian Aktif!", "info")}
+              className={`${isTambahSiswa ? "hidden md:flex" : "flex"} text-primary hover:bg-surface-container-high transition-colors p-2 rounded-full items-center justify-center`}
+            >
+              <span className="material-symbols-outlined">search</span>
+            </button>
+          )}
+        </div>
       </header>
 
       {/* NavigationDrawer (Web/Desktop Only) */}

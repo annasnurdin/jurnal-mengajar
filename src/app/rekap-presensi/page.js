@@ -234,6 +234,26 @@ function RekapContent() {
         }
       }
 
+      if (localRecords.length > 0) {
+        setRiwayat(localRecords);
+        const storedStudents = localStorage.getItem("daftar_siswa");
+        let studentList = [];
+        if (storedStudents) {
+          try {
+            const parsed = JSON.parse(storedStudents);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              studentList = parsed.filter(s => !s.isDeleted);
+            }
+          } catch (e) {}
+        }
+        const uniqueClasses = [...new Set(studentList.map(s => s.class).filter(Boolean))].sort();
+        setClasses(uniqueClasses);
+        if (uniqueClasses.length > 0) {
+          setSelectedClass(uniqueClasses[0]);
+        }
+        setIsLoading(false);
+      }
+
       // 2. Fetch Sheet Records from Google Sheet (ONLY IF LOCAL IS EMPTY!)
       let sheetRecords = [];
       const shouldFetch = localRecords.length === 0;
@@ -437,16 +457,6 @@ function RekapContent() {
               Riwayat presensi harian yang disinkronkan ke Google Sheet (1 baris per hari).
             </p>
           </div>
-          <button
-            onClick={handleRefreshData}
-            disabled={isRefreshing}
-            className="flex items-center gap-xs px-4 py-2 border border-outline hover:bg-surface-container-high rounded-lg text-primary font-label-caps text-label-caps transition-colors cursor-pointer self-start sm:self-auto active:scale-95"
-          >
-            <span className={`material-symbols-outlined text-[20px] ${isRefreshing ? "animate-spin" : ""}`}>
-              sync
-            </span>
-            <span>{isRefreshing ? "Memperbarui..." : "Perbarui Data"}</span>
-          </button>
         </div>
 
         {/* Loading Screen */}

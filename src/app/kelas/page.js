@@ -3,12 +3,6 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 
-const initialClasses = [
-  { id: 1, code: "7A", name: "Kelas VII A", type: "SMP", studentCount: 32 },
-  { id: 2, code: "8C", name: "Kelas VIII C", type: "SMP", studentCount: 30 },
-  { id: 3, code: "9B", name: "Kelas IX B", type: "SMP", studentCount: 28 }
-];
-
 export default function KelasPage() {
   const [classes, setClasses] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -31,14 +25,81 @@ export default function KelasPage() {
     setTimeout(() => setToast(null), 2000);
   };
 
-  // Load classes dynamically from local storage on mount
+  // Load classes dynamically from local storage or API on mount
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const storedClasses = localStorage.getItem("daftar_kelas");
-      const storedStudents = localStorage.getItem("daftar_siswa");
+    const cachedClasses = localStorage.getItem("daftar_kelas");
+    const cachedStudents = localStorage.getItem("daftar_siswa");
+    if (cachedClasses || cachedStudents) {
+      let classesList = [];
+      let studentsList = [];
+      if (cachedStudents) {
+        try {
+          studentsList = JSON.parse(cachedStudents).filter(s => !s.isDeleted);
+        } catch (e) {}
+      }
+      let parsedClasses = [];
+      if (cachedClasses) {
+        try {
+          const parsed = JSON.parse(cachedClasses);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            parsedClasses = parsed;
+          }
+        } catch (e) {}
+      }
+      if (parsedClasses.length === 0 && studentsList.length > 0) {
+        parsedClasses = [...new Set(studentsList.map(s => s.class).filter(Boolean))].sort();
+      }
+      if (Array.isArray(parsedClasses) && parsedClasses.length > 0) {
+        classesList = parsedClasses.map((code, index) => {
+          const count = studentsList.filter(s => s.class === code).length;
+          return {
+            id: index + 1,
+            code: code,
+            name: `Kelas ${code}`,
+            type: code.startsWith("X") || code.startsWith("XI") || code.startsWith("XII") ? "SMA" : "SMP",
+            studentCount: count
+          };
+        });
+      }
+      setClasses(classesList);
+      setIsLoading(false);
+    }
+
+    const loadData = async () => {
+      let storedClasses = localStorage.getItem("daftar_kelas");
+      let storedStudents = localStorage.getItem("daftar_siswa");
       
       let classesList = [];
       let studentsList = [];
+      
+      if (!storedStudents) {
+        try {
+          const res = await fetch("/api/siswa");
+          if (res.ok) {
+            const result = await res.json();
+            if (result.data) {
+              const mapped = result.data.map((item) => {
+                const rawNis = item.NIS !== undefined ? item.NIS :
+                               item.nis !== undefined ? item.nis :
+                               item.Nis !== undefined ? item.Nis :
+                               item.ID !== undefined ? item.ID :
+                               item.id !== undefined ? item.id : "";
+                return {
+                  id: rawNis || item._rowNum,
+                  name: item["Nama Siswa"] || "",
+                  class: item["Kelas"] || "",
+                  nis: rawNis.toString().trim(),
+                  _rowNum: item._rowNum
+                };
+              });
+              localStorage.setItem("daftar_siswa", JSON.stringify(mapped));
+              storedStudents = JSON.stringify(mapped);
+            }
+          }
+        } catch (e) {
+          console.error("Failed to fetch students", e);
+        }
+      }
       
       if (storedStudents) {
         try {
@@ -48,41 +109,40 @@ export default function KelasPage() {
         }
       }
       
+      let parsedClasses = [];
       if (storedClasses) {
         try {
           const parsed = JSON.parse(storedClasses);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            classesList = parsed.map((code, index) => {
-              const count = studentsList.filter(s => s.class === code).length;
-              return {
-                id: index + 1,
-                code: code,
-                name: `Kelas ${code}`,
-                type: code.startsWith("X") || code.startsWith("XI") || code.startsWith("XII") ? "SMA" : "SMP",
-                studentCount: count
-              };
-            });
+            parsedClasses = parsed;
           }
         } catch (e) {
           console.error("Failed to parse stored classes", e);
         }
       }
       
-      // Fallback to initialClasses if no dynamic classes exist
-      if (classesList.length === 0) {
-        classesList = initialClasses.map((c) => {
-          const count = studentsList.filter(s => s.class === c.code).length;
+      if (parsedClasses.length === 0 && studentsList.length > 0) {
+        parsedClasses = [...new Set(studentsList.map(s => s.class).filter(Boolean))].sort();
+        localStorage.setItem("daftar_kelas", JSON.stringify(parsedClasses));
+      }
+      
+      if (Array.isArray(parsedClasses) && parsedClasses.length > 0) {
+        classesList = parsedClasses.map((code, index) => {
+          const count = studentsList.filter(s => s.class === code).length;
           return {
-            ...c,
-            studentCount: count || 0
+            id: index + 1,
+            code: code,
+            name: `Kelas ${code}`,
+            type: code.startsWith("X") || code.startsWith("XI") || code.startsWith("XII") ? "SMA" : "SMP",
+            studentCount: count
           };
         });
       }
       
       setClasses(classesList);
       setIsLoading(false);
-    }, 500);
-    return () => clearTimeout(timer);
+    };
+    loadData();
   }, []);
 
   // Compute filtered classes dynamically on render

@@ -52,44 +52,60 @@ function PresensiContent() {
 
   // Load classes, students, and saved attendance from localStorage
   useEffect(() => {
-    const timer = setTimeout(() => {
-      // 1. Get students first
-      const storedStudents = localStorage.getItem("daftar_siswa");
+    const cachedStudents = localStorage.getItem("daftar_siswa");
+    const cachedRiwayat = localStorage.getItem("riwayat_presensi");
+    if (cachedStudents || cachedRiwayat) {
       let studentList = [];
-      if (storedStudents) {
+      if (cachedStudents) {
         try {
-          const parsed = JSON.parse(storedStudents);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            studentList = parsed.filter(s => !s.isDeleted);
-          }
-        } catch (e) {
-          console.error(e);
-        }
-      }
-      if (studentList.length === 0) {
-        studentList = [];
-        localStorage.setItem("daftar_siswa", JSON.stringify([]));
+          studentList = JSON.parse(cachedStudents).filter(s => !s.isDeleted);
+        } catch (e) {}
       }
       setStudents(studentList);
-
-      // 2. Extract classes dynamically from student data (Filter sendiri)
       const uniqueClasses = [...new Set(studentList.map(s => s.class).filter(Boolean))].sort();
       setClasses(uniqueClasses);
-
-      // 3. Get Saved Attendance history
-      const storedRiwayat = localStorage.getItem("riwayat_presensi");
-      if (storedRiwayat) {
+      if (cachedRiwayat) {
         try {
-          setRiwayat(JSON.parse(storedRiwayat));
-        } catch (e) {
-          console.error(e);
-        }
+          setRiwayat(JSON.parse(cachedRiwayat));
+        } catch (e) {}
       }
-
       setIsLoading(false);
-    }, 500);
+    }
 
-    return () => clearTimeout(timer);
+    // 1. Get students first
+    const storedStudents = localStorage.getItem("daftar_siswa");
+    let studentList = [];
+    if (storedStudents) {
+      try {
+        const parsed = JSON.parse(storedStudents);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          studentList = parsed.filter(s => !s.isDeleted);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    if (studentList.length === 0) {
+      studentList = [];
+      localStorage.setItem("daftar_siswa", JSON.stringify([]));
+    }
+    setStudents(studentList);
+
+    // 2. Extract classes dynamically from student data (Filter sendiri)
+    const uniqueClasses = [...new Set(studentList.map(s => s.class).filter(Boolean))].sort();
+    setClasses(uniqueClasses);
+
+    // 3. Get Saved Attendance history
+    const storedRiwayat = localStorage.getItem("riwayat_presensi");
+    if (storedRiwayat) {
+      try {
+        setRiwayat(JSON.parse(storedRiwayat));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    setIsLoading(false);
   }, []);
 
   // Filter students based on kelas query param
