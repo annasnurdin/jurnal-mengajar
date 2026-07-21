@@ -1,27 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-
-const initialStudents = [
-  { id: 1, name: "Ahmad Fauzi", nis: "102938", class: "7A" },
-  { id: 2, name: "Budi Darmawan", nis: "102939", class: "7A" },
-  { id: 3, name: "Citra Kirana", nis: "102940", class: "8C" }
-];
 
 export default function TambahSiswaPage() {
   const router = useRouter();
   const [namaLengkap, setNamaLengkap] = useState("");
+  const [nisInput, setNisInput] = useState("");
   const [pilihKelas, setPilihKelas] = useState("");
+  // Lazy initialize class list from localStorage to avoid set-state-in-effect
+  const [classesList] = useState(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("daftar_kelas");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        } catch (e) {
+          console.error("Failed to parse stored classes", e);
+        }
+      }
+    }
+    return ["7A", "7B", "7C", "7D", "8A", "8C", "9B"];
+  });
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [alertMessage, setAlertMessage] = useState("");
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!namaLengkap || !pilihKelas) {
-      setAlertMessage("Nama lengkap dan kelas wajib diisi!");
+    if (!namaLengkap || !nisInput || !pilihKelas) {
+      setAlertMessage("Semua kolom formulir wajib diisi!");
       setIsAlertOpen(true);
       return;
     }
@@ -30,7 +43,7 @@ export default function TambahSiswaPage() {
 
     // Retrieve current list from localStorage
     const stored = localStorage.getItem("daftar_siswa");
-    let currentStudents = initialStudents;
+    let currentStudents = [];
     if (stored) {
       try {
         currentStudents = JSON.parse(stored);
@@ -39,18 +52,30 @@ export default function TambahSiswaPage() {
       }
     }
 
-    // Create new student object (ID only, no NIS)
+    // Check for duplicate NIS
+    const duplicate = currentStudents.some(
+      (s) => !s.isDeleted && s.nis.toString().trim() === nisInput.toString().trim()
+    );
+    if (duplicate) {
+      setAlertMessage(`Siswa dengan NIS "${nisInput}" sudah ada dalam data lokal!`);
+      setIsAlertOpen(true);
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Create new student object (manually input ID/NIS)
     const newStudent = {
-      id: currentStudents.length > 0 ? Math.max(...currentStudents.map(s => s.id)) + 1 : 1,
-      name: namaLengkap,
+      id: nisInput.trim(),
+      name: namaLengkap.trim(),
       class: pilihKelas,
-      nis: "" // No NIS, only ID as requested
+      nis: nisInput.trim(),
+      isNew: true
     };
 
     const updated = [...currentStudents, newStudent];
     localStorage.setItem("daftar_siswa", JSON.stringify(updated));
 
-    // Simulate small saving transition and redirect
+    // Simulate saving transition and redirect
     setTimeout(() => {
       setIsSubmitting(false);
       router.push("/siswa");
@@ -77,7 +102,7 @@ export default function TambahSiswaPage() {
         <div className="mb-lg">
           <h2 className="font-h2 text-h2 text-on-surface mb-xs">Data Diri Siswa</h2>
           <p className="font-body-md text-body-md text-on-surface-variant">
-            Masukkan informasi lengkap siswa baru ke dalam sistem.
+            Masukkan informasi lengkap siswa baru ke dalam sistem secara manual.
           </p>
         </div>
 
@@ -85,9 +110,9 @@ export default function TambahSiswaPage() {
         <form onSubmit={handleSubmit} className="space-y-lg">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
             {/* Input: Nama Lengkap */}
-            <div className="flex flex-col gap-xs">
+            <div className="flex flex-col gap-xs md:col-span-2">
               <label className="font-label-caps text-label-caps text-on-surface-variant" htmlFor="namaLengkap">
-                NAMA LENGKAP
+                NAMA LENGKAP <span className="text-error">*</span>
               </label>
               <input
                 className="w-full px-md py-sm font-body-md text-body-md text-on-surface bg-surface-container-lowest border border-outline-variant rounded focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200 placeholder-outline"
@@ -101,10 +126,27 @@ export default function TambahSiswaPage() {
               />
             </div>
 
+            {/* Input: NIS (Manual ID) */}
+            <div className="flex flex-col gap-xs">
+              <label className="font-label-caps text-label-caps text-on-surface-variant" htmlFor="nisInput">
+                NIS / ID SISWA <span className="text-error">*</span>
+              </label>
+              <input
+                className="w-full px-md py-sm font-body-md text-body-md text-on-surface bg-surface-container-lowest border border-outline-variant rounded focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200 placeholder-outline"
+                id="nisInput"
+                name="nisInput"
+                placeholder="Masukkan NIS unik siswa (contoh: 1234)"
+                required
+                type="text"
+                value={nisInput}
+                onChange={(e) => setNisInput(e.target.value)}
+              />
+            </div>
+
             {/* Input: Pilih Kelas */}
             <div className="flex flex-col gap-xs">
               <label className="font-label-caps text-label-caps text-on-surface-variant" htmlFor="pilihKelas">
-                PILIH KELAS
+                PILIH KELAS <span className="text-error">*</span>
               </label>
               <div className="relative">
                 <select
@@ -118,15 +160,11 @@ export default function TambahSiswaPage() {
                   <option value="" disabled>
                     Pilih kelas yang tersedia
                   </option>
-                  <option value="7A">Kelas 7A</option>
-                  <option value="8C">Kelas 8C</option>
-                  <option value="9B">Kelas 9B</option>
-                  <option value="X-A">Kelas X - A</option>
-                  <option value="X-B">Kelas X - B</option>
-                  <option value="XI-A">Kelas XI - A</option>
-                  <option value="XI-B">Kelas XI - B</option>
-                  <option value="XII-A">Kelas XII - A</option>
-                  <option value="XII-B">Kelas XII - B</option>
+                  {classesList.map((c) => (
+                    <option key={c} value={c}>
+                      Kelas {c}
+                    </option>
+                  ))}
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-md text-on-surface-variant">
                   <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>

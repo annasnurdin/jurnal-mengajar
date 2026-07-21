@@ -3,16 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 
-
-const initialClasses = [
-  { id: 1, code: "7A", name: "Kelas VII A", type: "IPA", studentCount: 32 },
-  { id: 2, code: "8C", name: "Kelas VIII C", type: "IPS", studentCount: 30 },
-  { id: 3, code: "9B", name: "Kelas IX B", type: "BHS", studentCount: 28 }
-];
-
 export default function KelasPage() {
   const [classes, setClasses] = useState([]);
-  const [filteredClasses, setFilteredClasses] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
@@ -22,50 +14,154 @@ export default function KelasPage() {
   const [classForm, setClassForm] = useState({
     code: "",
     name: "",
-    type: "IPA",
+    type: "SMP",
     studentCount: 0
   });
 
-  // Toast notifications
+  // Toast notifications (2-second timeout as requested)
   const [toast, setToast] = useState(null);
   const showToast = (message, type = "success") => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
+    setTimeout(() => setToast(null), 2000);
   };
 
-  // Load classes on mount
+  // Load classes dynamically from local storage or API on mount
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setClasses(initialClasses);
-      setFilteredClasses(initialClasses);
+    const cachedClasses = localStorage.getItem("daftar_kelas");
+    const cachedStudents = localStorage.getItem("daftar_siswa");
+    if (cachedClasses || cachedStudents) {
+      let classesList = [];
+      let studentsList = [];
+      if (cachedStudents) {
+        try {
+          studentsList = JSON.parse(cachedStudents).filter(s => !s.isDeleted);
+        } catch (e) {}
+      }
+      let parsedClasses = [];
+      if (cachedClasses) {
+        try {
+          const parsed = JSON.parse(cachedClasses);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            parsedClasses = parsed;
+          }
+        } catch (e) {}
+      }
+      if (parsedClasses.length === 0 && studentsList.length > 0) {
+        parsedClasses = [...new Set(studentsList.map(s => s.class).filter(Boolean))].sort();
+      }
+      if (Array.isArray(parsedClasses) && parsedClasses.length > 0) {
+        classesList = parsedClasses.map((code, index) => {
+          const count = studentsList.filter(s => s.class === code).length;
+          return {
+            id: index + 1,
+            code: code,
+            name: `Kelas ${code}`,
+            type: code.startsWith("X") || code.startsWith("XI") || code.startsWith("XII") ? "SMA" : "SMP",
+            studentCount: count
+          };
+        });
+      }
+      setClasses(classesList);
       setIsLoading(false);
-    }, 500);
-    return () => clearTimeout(timer);
+    }
+
+    const loadData = async () => {
+      let storedClasses = localStorage.getItem("daftar_kelas");
+      let storedStudents = localStorage.getItem("daftar_siswa");
+      
+      let classesList = [];
+      let studentsList = [];
+      
+      if (!storedStudents) {
+        try {
+          const res = await fetch("/api/siswa");
+          if (res.ok) {
+            const result = await res.json();
+            if (result.data) {
+              const mapped = result.data.map((item) => {
+                const rawNis = item.NIS !== undefined ? item.NIS :
+                               item.nis !== undefined ? item.nis :
+                               item.Nis !== undefined ? item.Nis :
+                               item.ID !== undefined ? item.ID :
+                               item.id !== undefined ? item.id : "";
+                return {
+                  id: rawNis || item._rowNum,
+                  name: item["Nama Siswa"] || "",
+                  class: item["Kelas"] || "",
+                  nis: rawNis.toString().trim(),
+                  _rowNum: item._rowNum
+                };
+              });
+              localStorage.setItem("daftar_siswa", JSON.stringify(mapped));
+              storedStudents = JSON.stringify(mapped);
+            }
+          }
+        } catch (e) {
+          console.error("Failed to fetch students", e);
+        }
+      }
+      
+      if (storedStudents) {
+        try {
+          studentsList = JSON.parse(storedStudents).filter(s => !s.isDeleted);
+        } catch (e) {
+          console.error("Failed to parse stored students", e);
+        }
+      }
+      
+      let parsedClasses = [];
+      if (storedClasses) {
+        try {
+          const parsed = JSON.parse(storedClasses);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            parsedClasses = parsed;
+          }
+        } catch (e) {
+          console.error("Failed to parse stored classes", e);
+        }
+      }
+      
+      if (parsedClasses.length === 0 && studentsList.length > 0) {
+        parsedClasses = [...new Set(studentsList.map(s => s.class).filter(Boolean))].sort();
+        localStorage.setItem("daftar_kelas", JSON.stringify(parsedClasses));
+      }
+      
+      if (Array.isArray(parsedClasses) && parsedClasses.length > 0) {
+        classesList = parsedClasses.map((code, index) => {
+          const count = studentsList.filter(s => s.class === code).length;
+          return {
+            id: index + 1,
+            code: code,
+            name: `Kelas ${code}`,
+            type: code.startsWith("X") || code.startsWith("XI") || code.startsWith("XII") ? "SMA" : "SMP",
+            studentCount: count
+          };
+        });
+      }
+      
+      setClasses(classesList);
+      setIsLoading(false);
+    };
+    loadData();
   }, []);
 
-  // Handle Search filtering
-  useEffect(() => {
-    if (searchQuery.trim() === "") {
-      setFilteredClasses(classes);
-    } else {
-      const query = searchQuery.toLowerCase();
-      setFilteredClasses(
-        classes.filter(
-          (c) =>
-            c.name.toLowerCase().includes(query) ||
-            c.code.toLowerCase().includes(query) ||
-            c.type.toLowerCase().includes(query)
-        )
-      );
-    }
-  }, [searchQuery, classes]);
+  // Compute filtered classes dynamically on render
+  const filteredClasses = classes.filter((c) => {
+    if (searchQuery.trim() === "") return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      c.name.toLowerCase().includes(query) ||
+      c.code.toLowerCase().includes(query) ||
+      c.type.toLowerCase().includes(query)
+    );
+  });
 
   // Create new class
   const openCreateModal = () => {
     setClassForm({
       code: "",
       name: "",
-      type: "IPA",
+      type: "SMP",
       studentCount: 0
     });
     setIsModalOpen(true);
@@ -80,14 +176,23 @@ export default function KelasPage() {
 
     setIsSubmitting(true);
     setTimeout(() => {
+      const codeUpper = classForm.code.toUpperCase().trim();
       const newClass = {
         id: classes.length > 0 ? Math.max(...classes.map(c => c.id)) + 1 : 1,
-        code: classForm.code.toUpperCase(),
-        name: classForm.name,
+        code: codeUpper,
+        name: classForm.name.trim(),
         type: classForm.type,
         studentCount: classForm.studentCount || 0
       };
-      setClasses((prev) => [...prev, newClass]);
+      
+      // Append locally
+      const updatedClasses = [...classes, newClass];
+      setClasses(updatedClasses);
+      
+      // Store class list codes to localstorage
+      const codes = updatedClasses.map(c => c.code);
+      localStorage.setItem("daftar_kelas", JSON.stringify(codes));
+      
       showToast("Kelas baru berhasil ditambahkan!");
       setIsModalOpen(false);
       setIsSubmitting(false);
@@ -113,7 +218,7 @@ export default function KelasPage() {
           <div>
             <h2 className="font-display text-display text-primary">Daftar Kelas</h2>
             <p className="font-body-md text-body-md text-on-surface-variant mt-1">
-              Kelola kelas dan wali kelas tahun ajaran ini. Klik kelas untuk melihat daftar siswa.
+              Kelola kelas dan wali kelas tahun ajaran ini. Klik kelas untuk mulai melakukan presensi.
             </p>
           </div>
           <div className="relative w-full md:w-72">
@@ -122,7 +227,7 @@ export default function KelasPage() {
             </span>
             <input
               className="w-full pl-10 pr-4 py-2 bg-surface border border-outline-variant rounded-full font-body-md text-body-md focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-              placeholder="Cari kelas atau jurusan..."
+              placeholder="Cari kelas..."
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -169,7 +274,7 @@ export default function KelasPage() {
               return (
                 <Link
                   key={c.id}
-                  href={`/siswa?kelas=${c.code}`}
+                  href={`/presensi?kelas=${c.code}`}
                   className="bg-surface rounded-xl border border-outline-variant p-4 hover:border-primary transition-colors cursor-pointer group flex flex-col justify-between"
                 >
                   <div>
@@ -187,7 +292,7 @@ export default function KelasPage() {
                   </div>
                   <div className="font-body-md text-body-md text-on-surface-variant flex items-center gap-2 mt-auto pt-4 border-t border-surface-container-high">
                     <span className="material-symbols-outlined text-[18px]">groups</span>
-                    <span>{c.studentCount} Siswa</span>
+                    <span>{c.studentCount} Siswa Aktif</span>
                   </div>
                 </Link>
               );
@@ -272,9 +377,8 @@ export default function KelasPage() {
                       }
                       className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
                     >
-                      <option value="IPA">IPA (Ilmu Pengetahuan Alam)</option>
-                      <option value="IPS">IPS (Ilmu Pengetahuan Sosial)</option>
-                      <option value="BHS">BHS (Bahasa)</option>
+                      <option value="SMP">SMP (Sekolah Menengah Pertama)</option>
+                      <option value="SMA">SMA (Sekolah Menengah Atas)</option>
                       <option value="UMUM">UMUM / Lainnya</option>
                     </select>
                   </div>
