@@ -10,6 +10,7 @@ function RekapContent() {
   const [riwayat, setRiwayat] = useState([]); // List of daily records: { id, tanggal, classesList: [...], synced }
   const [classes, setClasses] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Syncing and Accordion state
   const [isSyncing, setIsSyncing] = useState({}); // { recordId: boolean }
@@ -133,22 +134,79 @@ function RekapContent() {
         }
       }
       
-      // Keep today's records OR any records that failed to sync
-      const cleanedList = updatedList.filter(r => r.tanggal === todayStr || !r.synced);
-      setRiwayat(cleanedList);
-      localStorage.setItem("riwayat_presensi", JSON.stringify(cleanedList));
+      setRiwayat(updatedList);
+      localStorage.setItem("riwayat_presensi", JSON.stringify(updatedList));
       
       if (successCount > 0) {
-        showToast(`Auto-sync selesai. ${successCount} hari riwayat lama berhasil disinkronkan & dikosongkan.`, "success");
+        showToast(`Auto-sync selesai. ${successCount} hari riwayat lama berhasil disinkronkan.`, "success");
       }
-    } else {
-      // If all previous day's records are already synced, clear them from localStorage
-      const cleanedList = recordsList.filter(r => r.tanggal === todayStr);
-      if (cleanedList.length !== recordsList.length) {
-        setRiwayat(cleanedList);
-        localStorage.setItem("riwayat_presensi", JSON.stringify(cleanedList));
-        showToast("Riwayat hari sebelumnya telah dikosongkan dari memori lokal.", "info");
+    }
+  };
+
+  const handleRefreshData = async () => {
+    setIsRefreshing(true);
+    showToast("Mengambil data terbaru dari Google Sheets...", "info");
+
+    try {
+      const [resSiswa, resPresensi] = await Promise.all([
+        fetch("/api/siswa").catch(() => null),
+        fetch("/api/presensi").catch(() => null)
+      ]);
+
+      let mappedSiswa = [];
+      if (resSiswa && resSiswa.ok) {
+        const dataSiswa = await resSiswa.json().catch(() => ({}));
+        if (dataSiswa && Array.isArray(dataSiswa.data)) {
+          mappedSiswa = dataSiswa.data.map((item) => {
+            const rawNis = item.NIS !== undefined ? item.NIS :
+                           item.nis !== undefined ? item.nis :
+                           item.Nis !== undefined ? item.Nis :
+                           item.ID !== undefined ? item.ID :
+                           item.id !== undefined ? item.id : "";
+            return {
+              id: rawNis || item._rowNum,
+              name: item["Nama Siswa"] || "",
+              class: item["Kelas"] || "",
+              nis: rawNis.toString().trim(),
+              _rowNum: item._rowNum
+            };
+          });
+        }
       }
+
+      let mappedPresensi = [];
+      if (resPresensi && resPresensi.ok) {
+        const dataPresensi = await resPresensi.json().catch(() => ({}));
+        if (dataPresensi && Array.isArray(dataPresensi.data)) {
+          mappedPresensi = dataPresensi.data.map((item, idx) => ({
+            id: `sheet_day_${idx}_${Date.now()}`,
+            tanggal: item.Tanggal,
+            classesList: parseKehadiranString(item.Kehadiran),
+            synced: true
+          }));
+        }
+      }
+
+      if (mappedSiswa.length > 0) {
+        localStorage.setItem("daftar_siswa", JSON.stringify(mappedSiswa));
+      }
+      localStorage.setItem("riwayat_presensi", JSON.stringify(mappedPresensi));
+
+      setRiwayat(mappedPresensi);
+
+      const activeSiswa = mappedSiswa.filter(s => !s.isDeleted);
+      const uniqueClasses = [...new Set(activeSiswa.map(s => s.class).filter(Boolean))].sort();
+      setClasses(uniqueClasses);
+      if (uniqueClasses.length > 0) {
+        setSelectedClass(uniqueClasses[0]);
+      }
+
+      showToast("Data berhasil diperbarui!");
+    } catch (err) {
+      console.error("Gagal memperbarui data:", err);
+      showToast("Gagal memperbarui data dari Google Sheets.", "error");
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -372,11 +430,23 @@ function RekapContent() {
       {/* Main Canvas Container */}
       <main className="flex-grow px-container-margin py-md max-w-4xl mx-auto w-full flex flex-col pb-32">
         {/* Header Title */}
-        <div className="mb-lg">
-          <h2 className="font-display text-display text-primary">Rekap Presensi</h2>
-          <p className="font-body-md text-body-md text-on-surface-variant mt-1">
-            Riwayat presensi harian yang disinkronkan ke Google Sheet (1 baris per hari).
-          </p>
+        <div className="mb-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h2 className="font-display text-display text-primary">Rekap Presensi</h2>
+            <p className="font-body-md text-body-md text-on-surface-variant mt-1">
+              Riwayat presensi harian yang disinkronkan ke Google Sheet (1 baris per hari).
+            </p>
+          </div>
+          <button
+            onClick={handleRefreshData}
+            disabled={isRefreshing}
+            className="flex items-center gap-xs px-4 py-2 border border-outline hover:bg-surface-container-high rounded-lg text-primary font-label-caps text-label-caps transition-colors cursor-pointer self-start sm:self-auto active:scale-95"
+          >
+            <span className={`material-symbols-outlined text-[20px] ${isRefreshing ? "animate-spin" : ""}`}>
+              sync
+            </span>
+            <span>{isRefreshing ? "Memperbarui..." : "Perbarui Data"}</span>
+          </button>
         </div>
 
         {/* Loading Screen */}
