@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 
 const initialStudents = [
   { id: "1234", name: "Annas", class: "7A", nis: "1234" },
@@ -399,17 +398,19 @@ function RekapContent() {
             <p className="font-body-lg text-body-lg">Memuat data rekap...</p>
           </div>
         ) : riwayat.length === 0 ? (
-          <div className="bg-surface border border-outline-variant rounded-2xl p-xl text-center flex flex-col items-center gap-md">
-            <span className="material-symbols-outlined text-[64px] text-on-surface-variant">assessment</span>
-            <div>
-              <h3 className="font-h2 text-h2 text-on-surface">Belum Ada Riwayat</h3>
-              <p className="font-body-md text-body-md text-on-surface-variant mt-sm max-w-sm">
-                Belum ada rekap presensi yang disimpan. Silakan klik tombol "+" di kanan bawah untuk mulai presensi.
-              </p>
+          <div className="bg-surface border border-outline-variant rounded-2xl p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <span className="material-symbols-outlined text-primary text-[32px] mt-1">assessment</span>
+              <div>
+                <h3 className="font-h3 text-h3 font-semibold text-on-surface">Belum Ada Riwayat</h3>
+                <p className="font-body-md text-body-md text-on-surface-variant mt-1">
+                  Belum ada rekap presensi yang disimpan. Silakan klik tombol "+" di kanan bawah untuk mulai presensi.
+                </p>
+              </div>
             </div>
             <button
               onClick={() => setShowClassModal(true)}
-              className="bg-primary text-on-primary font-label-caps text-label-caps px-4 py-2.5 rounded-lg shadow-sm hover:bg-primary/95 transition-all flex items-center gap-xs"
+              className="bg-primary text-on-primary font-label-caps text-label-caps px-4 py-2.5 rounded-lg shadow-sm hover:bg-primary/95 transition-all flex items-center gap-xs cursor-pointer whitespace-nowrap self-start sm:self-auto"
             >
               <span className="material-symbols-outlined text-[20px]">add</span>
               Mulai Presensi
