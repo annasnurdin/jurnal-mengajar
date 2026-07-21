@@ -4,8 +4,19 @@ import { useState, useEffect, useCallback } from "react";
 
 
 export default function Home() {
-  const [entries, setEntries] = useState([]);
-  const [parsedEntries, setParsedEntries] = useState([]);
+  const [entries, setEntries] = useState(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("jurnal_entries");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) return parsed;
+        } catch (e) {}
+      }
+    }
+    return [];
+  });
+  const [parsedEntries, setParsedEntries] = useState(entries);
   const [metadata, setMetadata] = useState({
     mataPelajaran: "Matematika",
     kelas: "7A",
@@ -13,7 +24,20 @@ export default function Home() {
     tahunAjaran: "2023/2024",
   });
   
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("jurnal_entries");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return false;
+          }
+        } catch (e) {}
+      }
+    }
+    return true;
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -77,8 +101,10 @@ export default function Home() {
     return `${dayName}, ${dayNum < 10 ? '0' + dayNum : dayNum} ${monthName} ${year}`;
   };
 
-  const fetchJurnal = useCallback(async () => {
-    setIsLoading(true);
+  const fetchJurnal = useCallback(async (showGlobalSpinner = true) => {
+    if (showGlobalSpinner) {
+      setIsLoading(true);
+    }
     try {
       let localEntries = [];
       if (typeof window !== "undefined") {
@@ -134,7 +160,17 @@ export default function Home() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchJurnal();
+      let hasCached = false;
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("jurnal_entries");
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            hasCached = Array.isArray(parsed) && parsed.length > 0;
+          } catch (e) {}
+        }
+      }
+      fetchJurnal(!hasCached);
     }, 0);
     return () => clearTimeout(timer);
   }, [fetchJurnal]);
@@ -307,7 +343,7 @@ export default function Home() {
   const handleSyncEntry = async (entry) => {
     const id = entry.ID;
     setSyncingIds(prev => ({ ...prev, [id]: true }));
-    showToast("Sinkronisasi data ke Google Sheets...", "info");
+
     try {
       const payload = {
         "Hari, tanggal": entry["Hari, tanggal"],
@@ -333,11 +369,20 @@ export default function Home() {
       }
 
       if (!res.ok) throw new Error("Gagal menyinkronkan data jurnal");
+      
+      // Update local storage and state to synced: true
+      const updated = entries.map(e => e.ID === id ? { ...e, synced: true } : e);
+      setEntries(updated);
+      setParsedEntries(updated);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("jurnal_entries", JSON.stringify(updated));
+      }
+
       showToast("Jurnal berhasil disinkronkan ke Google Sheet!");
-      await fetchJurnal();
+      await fetchJurnal(false);
     } catch (e) {
       console.error(e);
-      showToast(e.message || "Sinkronisasi gagal.", "error");
+      showToast("Gagal sinkronisasi data ke Google Sheets.", "error");
     } finally {
       setSyncingIds(prev => ({ ...prev, [id]: false }));
     }
@@ -466,6 +511,11 @@ export default function Home() {
                           <span className="material-symbols-outlined text-[14px]">cloud_done</span>
                           Ok
                         </span>
+                      ) : syncingIds[entry.ID] ? (
+                        <span className="text-amber-500 flex items-center gap-0.5 text-[10px]">
+                          <span className="material-symbols-outlined text-[14px] animate-spin">sync</span>
+                          Syncing...
+                        </span>
                       ) : (
                         <span className="text-amber-600 flex items-center gap-0.5 text-[10px] animate-pulse">
                           <span className="material-symbols-outlined text-[14px]">cloud_queue</span>
@@ -478,11 +528,11 @@ export default function Home() {
                         <button
                           onClick={() => handleSyncEntry(entry)}
                           disabled={syncingIds[entry.ID]}
-                          className="text-amber-500 hover:bg-amber-50 p-1 rounded-full transition-colors flex items-center justify-center"
+                          className="text-amber-500 hover:bg-amber-50 p-1 rounded-full transition-colors flex items-center justify-center disabled:opacity-50"
                           title="Sinkronisasi ke Sheet"
                         >
                           <span className={`material-symbols-outlined text-[18px] ${syncingIds[entry.ID] ? "animate-spin" : ""}`}>
-                            cloud_upload
+                            {syncingIds[entry.ID] ? "sync" : "cloud_upload"}
                           </span>
                         </button>
                       )}
@@ -561,14 +611,14 @@ export default function Home() {
                           <button
                             onClick={() => handleSyncEntry(entry)}
                             disabled={syncingIds[entry.ID]}
-                            className="bg-amber-500 hover:bg-amber-600 text-white inline-flex items-center gap-1.5 px-3 py-1 rounded-full transition-all active:scale-95 text-xs font-semibold shadow-sm cursor-pointer"
+                            className="bg-amber-500 hover:bg-amber-600 text-white inline-flex items-center gap-1.5 px-3 py-1 rounded-full transition-all active:scale-95 text-xs font-semibold shadow-sm cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
                           >
                             {syncingIds[entry.ID] ? (
                               <span className="material-symbols-outlined text-[16px] animate-spin">sync</span>
                             ) : (
                               <span className="material-symbols-outlined text-[16px]">cloud_upload</span>
                             )}
-                            Sync
+                            {syncingIds[entry.ID] ? "Syncing..." : "Sync"}
                           </button>
                         )}
                       </td>
@@ -576,14 +626,14 @@ export default function Home() {
                         <div className="flex justify-center gap-xs">
                           <button
                             onClick={() => openEditModal(entry)}
-                            className="text-primary hover:bg-surface-container-high p-1 rounded-full active:opacity-80 transition-all"
+                            className="text-primary hover:bg-surface-container-high p-1 rounded-full active:opacity-80 transition-all cursor-pointer"
                             title="Edit Jurnal"
                           >
                             <span className="material-symbols-outlined text-[20px]">edit</span>
                           </button>
                           <button
                             onClick={() => openDeleteModal(entry)}
-                            className="text-error hover:bg-error-container/20 p-1 rounded-full active:opacity-80 transition-all"
+                            className="text-error hover:bg-error-container/20 p-1 rounded-full active:opacity-80 transition-all cursor-pointer"
                             title="Hapus Jurnal"
                           >
                             <span className="material-symbols-outlined text-[20px]">delete</span>
