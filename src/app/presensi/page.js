@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 
 function PresensiContent() {
   const router = useRouter();
@@ -10,10 +11,39 @@ function PresensiContent() {
   const kelasParam = searchParams.get("kelas");
 
   // App States
-  const [classes, setClasses] = useState([]);
-  const [students, setStudents] = useState([]);
+  const [classes, setClasses] = useState(() => {
+    if (typeof window !== "undefined") {
+      const storedStudents = localStorage.getItem("daftar_siswa");
+      if (storedStudents) {
+        try {
+          const parsed = JSON.parse(storedStudents).filter(s => !s.isDeleted);
+          return [...new Set(parsed.map(s => s.class).filter(Boolean))].sort();
+        } catch (e) {}
+      }
+    }
+    return [];
+  });
+  const [students, setStudents] = useState(() => {
+    if (typeof window !== "undefined") {
+      const storedStudents = localStorage.getItem("daftar_siswa");
+      if (storedStudents) {
+        try {
+          return JSON.parse(storedStudents).filter(s => !s.isDeleted);
+        } catch (e) {}
+      }
+    }
+    return [];
+  });
   const [classStudents, setClassStudents] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => {
+    if (typeof window !== "undefined") {
+      const storedStudents = localStorage.getItem("daftar_siswa");
+      if (storedStudents) {
+        return false;
+      }
+    }
+    return true;
+  });
 
   // Tinder Swipe States
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -31,7 +61,17 @@ function PresensiContent() {
 
   // Screen View: "swipe" | "summary" | "history"
   const [viewMode, setViewMode] = useState("swipe");
-  const [riwayat, setRiwayat] = useState([]);
+  const [riwayat, setRiwayat] = useState(() => {
+    if (typeof window !== "undefined") {
+      const storedRiwayat = localStorage.getItem("riwayat_presensi");
+      if (storedRiwayat) {
+        try {
+          return JSON.parse(storedRiwayat);
+        } catch (e) {}
+      }
+    }
+    return [];
+  });
   const [isSyncing, setIsSyncing] = useState({}); // { recordId: boolean }
 
   // Toast State
@@ -54,58 +94,60 @@ function PresensiContent() {
   useEffect(() => {
     const cachedStudents = localStorage.getItem("daftar_siswa");
     const cachedRiwayat = localStorage.getItem("riwayat_presensi");
-    if (cachedStudents || cachedRiwayat) {
-      let studentList = [];
-      if (cachedStudents) {
-        try {
-          studentList = JSON.parse(cachedStudents).filter(s => !s.isDeleted);
-        } catch (e) {}
-      }
-      setStudents(studentList);
-      const uniqueClasses = [...new Set(studentList.map(s => s.class).filter(Boolean))].sort();
-      setClasses(uniqueClasses);
-      if (cachedRiwayat) {
-        try {
-          setRiwayat(JSON.parse(cachedRiwayat));
-        } catch (e) {}
-      }
-      setIsLoading(false);
+    
+    // Synchronously check on mount
+    let studentList = [];
+    if (cachedStudents) {
+      try {
+        studentList = JSON.parse(cachedStudents).filter(s => !s.isDeleted);
+      } catch (e) {}
+    }
+    setStudents(studentList);
+    const uniqueClasses = [...new Set(studentList.map(s => s.class).filter(Boolean))].sort();
+    setClasses(uniqueClasses);
+    if (cachedRiwayat) {
+      try {
+        setRiwayat(JSON.parse(cachedRiwayat));
+      } catch (e) {}
     }
 
-    // 1. Get students first
-    const storedStudents = localStorage.getItem("daftar_siswa");
-    let studentList = [];
-    if (storedStudents) {
+    const loadFromAPI = async () => {
+      setIsLoading(true);
       try {
-        const parsed = JSON.parse(storedStudents);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          studentList = parsed.filter(s => !s.isDeleted);
+        const res = await fetch("/api/siswa");
+        if (res.ok) {
+          const result = await res.json();
+          if (result.data) {
+            const mapped = result.data.map((item) => {
+              const rawNis = item.NIS !== undefined ? item.NIS :
+                             item.nis !== undefined ? item.nis :
+                             item.Nis !== undefined ? item.Nis :
+                             item.ID !== undefined ? item.ID :
+                             item.id !== undefined ? item.id : "";
+              return {
+                id: rawNis || item._rowNum,
+                name: item["Nama Siswa"] || "",
+                class: item["Kelas"] || "",
+                nis: rawNis.toString().trim(),
+                _rowNum: item._rowNum
+              };
+            });
+            localStorage.setItem("daftar_siswa", JSON.stringify(mapped));
+            setStudents(mapped);
+            const unique = [...new Set(mapped.map(s => s.class).filter(Boolean))].sort();
+            setClasses(unique);
+          }
         }
       } catch (e) {
         console.error(e);
+      } finally {
+        setIsLoading(false);
       }
-    }
-    if (studentList.length === 0) {
-      studentList = [];
-      localStorage.setItem("daftar_siswa", JSON.stringify([]));
-    }
-    setStudents(studentList);
+    };
 
-    // 2. Extract classes dynamically from student data (Filter sendiri)
-    const uniqueClasses = [...new Set(studentList.map(s => s.class).filter(Boolean))].sort();
-    setClasses(uniqueClasses);
-
-    // 3. Get Saved Attendance history
-    const storedRiwayat = localStorage.getItem("riwayat_presensi");
-    if (storedRiwayat) {
-      try {
-        setRiwayat(JSON.parse(storedRiwayat));
-      } catch (e) {
-        console.error(e);
-      }
+    if (!cachedStudents) {
+      loadFromAPI();
     }
-
-    setIsLoading(false);
   }, []);
 
   // Filter students based on kelas query param
@@ -1075,15 +1117,14 @@ function PresensiContent() {
   );
 }
 
+const DynamicPresensiContent = dynamic(() => Promise.resolve(PresensiContent), {
+  ssr: false
+});
+
 export default function PresensiPage() {
   return (
-    <Suspense fallback={
-      <div className="flex flex-col items-center justify-center min-h-screen gap-md text-on-surface-variant">
-        <span className="material-symbols-outlined text-[48px] animate-spin text-primary">sync</span>
-        <p className="font-body-lg text-body-lg">Memuat halaman presensi...</p>
-      </div>
-    }>
-      <PresensiContent />
+    <Suspense fallback={null}>
+      <DynamicPresensiContent />
     </Suspense>
   );
 }

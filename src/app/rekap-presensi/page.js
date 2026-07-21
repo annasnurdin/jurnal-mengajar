@@ -1,15 +1,45 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 
 function RekapContent() {
   const router = useRouter();
 
   // Core States
-  const [riwayat, setRiwayat] = useState([]); // List of daily records: { id, tanggal, classesList: [...], synced }
-  const [classes, setClasses] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [riwayat, setRiwayat] = useState(() => {
+    if (typeof window !== "undefined") {
+      const storedRiwayat = localStorage.getItem("riwayat_presensi");
+      if (storedRiwayat) {
+        try {
+          return JSON.parse(storedRiwayat);
+        } catch (e) {}
+      }
+    }
+    return [];
+  });
+  const [classes, setClasses] = useState(() => {
+    if (typeof window !== "undefined") {
+      const storedStudents = localStorage.getItem("daftar_siswa");
+      if (storedStudents) {
+        try {
+          const parsed = JSON.parse(storedStudents).filter(s => !s.isDeleted);
+          return [...new Set(parsed.map(s => s.class).filter(Boolean))].sort();
+        } catch (e) {}
+      }
+    }
+    return [];
+  });
+  const [isLoading, setIsLoading] = useState(() => {
+    if (typeof window !== "undefined") {
+      const storedRiwayat = localStorage.getItem("riwayat_presensi");
+      if (storedRiwayat) {
+        return false;
+      }
+    }
+    return true;
+  });
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Syncing and Accordion state
@@ -217,48 +247,29 @@ function RekapContent() {
     if (hasLoaded.current) return;
     hasLoaded.current = true;
 
+    // Load Local Records synchronously on mount
+    let localRecords = [];
+    const storedRiwayat = localStorage.getItem("riwayat_presensi");
+    if (storedRiwayat) {
+      try {
+        const parsed = JSON.parse(storedRiwayat);
+        if (Array.isArray(parsed)) {
+          localRecords = parsed;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
     const loadAndMergeData = async () => {
       const todayStr = getIndonesianDate(new Date());
-
-      // 1. Load Local Records
-      let localRecords = [];
-      const storedRiwayat = localStorage.getItem("riwayat_presensi");
-      if (storedRiwayat) {
-        try {
-          const parsed = JSON.parse(storedRiwayat);
-          if (Array.isArray(parsed)) {
-            localRecords = parsed;
-          }
-        } catch (e) {
-          console.error(e);
-        }
-      }
-
-      if (localRecords.length > 0) {
-        setRiwayat(localRecords);
-        const storedStudents = localStorage.getItem("daftar_siswa");
-        let studentList = [];
-        if (storedStudents) {
-          try {
-            const parsed = JSON.parse(storedStudents);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              studentList = parsed.filter(s => !s.isDeleted);
-            }
-          } catch (e) {}
-        }
-        const uniqueClasses = [...new Set(studentList.map(s => s.class).filter(Boolean))].sort();
-        setClasses(uniqueClasses);
-        if (uniqueClasses.length > 0) {
-          setSelectedClass(uniqueClasses[0]);
-        }
-        setIsLoading(false);
-      }
 
       // 2. Fetch Sheet Records from Google Sheet (ONLY IF LOCAL IS EMPTY!)
       let sheetRecords = [];
       const shouldFetch = localRecords.length === 0;
 
       if (shouldFetch) {
+        setIsLoading(true);
         try {
           const res = await fetch("/api/presensi");
           if (res.ok) {
@@ -345,7 +356,9 @@ function RekapContent() {
       }
     };
 
-    loadAndMergeData();
+    if (localRecords.length === 0) {
+      loadAndMergeData();
+    }
   }, []);
 
   // Real Sync to Google Sheets (Saves all classes of the day into 1 row)
@@ -701,15 +714,10 @@ function RekapContent() {
   );
 }
 
+const DynamicRekapContent = dynamic(() => Promise.resolve(RekapContent), {
+  ssr: false
+});
+
 export default function RekapPage() {
-  return (
-    <Suspense fallback={
-      <div className="flex flex-col items-center justify-center min-h-screen gap-md text-on-surface-variant">
-        <span className="material-symbols-outlined text-[48px] animate-spin text-primary">sync</span>
-        <p className="font-body-lg text-body-lg">Memuat halaman rekap...</p>
-      </div>
-    }>
-      <RekapContent />
-    </Suspense>
-  );
+  return <DynamicRekapContent />;
 }

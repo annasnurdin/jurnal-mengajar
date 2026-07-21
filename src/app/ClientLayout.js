@@ -344,7 +344,7 @@ export default function ClientLayout({ children }) {
       </aside>
 
       {/* Page Canvas Container */}
-      <div className="flex-grow flex flex-col">
+      <div key={pathname} className="flex-grow flex flex-col animate-fade-in">
         {children}
       </div>
 
