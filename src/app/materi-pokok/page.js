@@ -245,11 +245,11 @@ function MateriPokokContent() {
       {/* Main Canvas */}
       <main className="w-full max-w-7xl px-container-margin py-md flex-grow mx-auto">
         {/* Header & Search */}
-        <div className="mb-lg flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="mb-lg text-center flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h2 className="font-display text-display text-primary">Manajemen Materi Pokok</h2>
             <p className="font-body-md text-body-md text-on-surface-variant">
-              Kelola data silabus materi pokok pengajaran secara langsung di Google Sheets.
+              Materi Pokok disini digunakan untuk mengisi dropdown saat tambah Jurnal
             </p>
           </div>
           <div className="relative w-full md:w-72">
@@ -364,7 +364,7 @@ function MateriPokokContent() {
       {/* Floating Action Button */}
       <button
         onClick={openAddModal}
-        className="fixed bottom-24 md:bottom-8 right-4 md:right-8 w-14 h-14 bg-primary text-on-primary rounded-full shadow-lg flex items-center justify-center hover:bg-primary-container hover:shadow-xl transition-all duration-200 z-40 active:scale-95 animate-fade-in"
+        className="fixed bottom-[92px] md:bottom-8 right-container-margin md:right-8 w-14 h-14 bg-primary text-on-primary rounded-full shadow-lg flex items-center justify-center hover:bg-primary-container hover:shadow-xl transition-all duration-200 z-40 active:scale-95 animate-fade-in"
       >
         <span className="material-symbols-outlined text-[28px]">add</span>
       </button>

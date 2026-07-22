@@ -48,6 +48,7 @@ export default function ClientLayout({ children }) {
   const [isInitializing, setIsInitializing] = useState(true);
   const [syncKey, setSyncKey] = useState(0);
   const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [teacherName, setTeacherName] = useState("Guru Terbaik");
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profileNameInput, setProfileNameInput] = useState("");
@@ -440,7 +441,7 @@ export default function ClientLayout({ children }) {
             </Link>
           ) : (
             <button
-              onClick={() => showToast("Menu sidebar akan segera hadir!", "info")}
+              onClick={() => setIsMobileDrawerOpen(true)}
               className="md:hidden text-primary hover:bg-surface-container-high transition-colors p-2 rounded-full flex items-center justify-center"
             >
               <span className="material-symbols-outlined">menu</span>
@@ -547,9 +548,57 @@ export default function ClientLayout({ children }) {
           </button>
         </nav>
       </aside>
+      
+      {/* Mobile Navigation Drawer */}
+      {isMobileDrawerOpen && (
+        <>
+          {/* Backdrop Overlay */}
+          <div
+            onClick={() => setIsMobileDrawerOpen(false)}
+            className="fixed inset-0 bg-black/50 z-[90] md:hidden animate-fade-in"
+          />
+          {/* Drawer content panel */}
+          <aside className="fixed inset-y-0 left-0 z-[100] flex flex-col py-lg h-full w-72 rounded-r-xl bg-surface shadow-2xl border-r border-outline-variant md:hidden animate-slide-in-left">
+            {/* Profile Header */}
+            <div
+              onClick={() => {
+                setIsMobileDrawerOpen(false);
+                openProfileModal();
+              }}
+              className="px-container-margin mb-8 flex items-center gap-4 cursor-pointer hover:bg-surface-container-high transition-colors rounded-xl p-2"
+              title="Atur Profil"
+            >
+              <img
+                alt="Foto Profil Guru"
+                className="w-12 h-12 rounded-full object-cover border border-outline-variant flex-shrink-0"
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuAvojQwEtGFaVdGzsoleYLUMtjK6m88IoL7ytbZq_yTAq6kJa_hs08rjN3cTJM5b-edFscwNn6DQLKqcfUJsGv66f0fghI75Zdw58jtjyCpMvKE6-kSOWhQRjC_MKThVHVYzBRbpgcg5GXScP8271mdyauSXWEHaiPkFBp6Jaz0bKjZdS2qZoRmzpifJknU23Qgk0RRLEdUGICMQ6yyLaPLDtmKvnhBhGwp6bfnaxZU_q5D2UaHjZqy2_VAcVJrC_iaTzVLYDaoZw"
+              />
+              <div className="min-w-0 flex-grow">
+                <h2 className="font-h2 text-h2 font-bold text-primary truncate" title={teacherName}>
+                  {teacherName}
+                </h2>
+                <p className="font-caption text-caption text-on-surface-variant hover:underline mt-0.5">Atur Profil</p>
+              </div>
+            </div>
+            {/* Nav Items */}
+            <nav className="flex-1 flex flex-col gap-2 px-2">
+              <button
+                onClick={() => {
+                  setIsMobileDrawerOpen(false);
+                  handleLogout();
+                }}
+                className="flex items-center gap-3 mx-2 px-4 py-3 rounded-full transition-all duration-200 text-error hover:bg-error-container/20 hover:text-error mt-auto cursor-pointer"
+              >
+                <span className="material-symbols-outlined">logout</span>
+                <span className="font-body-md text-body-md font-bold">Keluar</span>
+              </button>
+            </nav>
+          </aside>
+        </>
+      )}
 
       {/* Page Canvas Container */}
-      <div key={`${pathname}-${syncKey}`} className="flex-grow flex flex-col animate-fade-in">
+      <div key={`${pathname}-${syncKey}`} className="flex-grow flex flex-col page-fade-in">
         {children}
       </div>
 

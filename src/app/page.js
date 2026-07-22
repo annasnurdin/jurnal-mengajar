@@ -70,6 +70,8 @@ export default function Home() {
 
   // Toast Notification State
   const [toast, setToast] = useState(null);
+  const [dateFilter, setDateFilter] = useState("");
+  const [classFilter, setClassFilter] = useState("");
 
   // Show toast utility
   const showToast = (message, type = "success") => {
@@ -101,6 +103,24 @@ export default function Home() {
     const monthName = months[date.getMonth()];
     const year = date.getFullYear();
     return `${dayName}, ${dayNum < 10 ? '0' + dayNum : dayNum} ${monthName} ${year}`;
+  };
+
+  const matchesDateFilter = (entryDateStr, filterDateIso) => {
+    if (!filterDateIso) return true;
+    if (!entryDateStr) return false;
+
+    const filterDate = new Date(filterDateIso);
+    if (isNaN(filterDate.getTime())) return true;
+
+    const formattedFilter = formatHariTanggal(filterDateIso);
+    const parts = formattedFilter.split(", ")[1]?.split(" ") || [];
+    if (parts.length === 3) {
+      const [day, month, year] = parts;
+      const cleanEntry = entryDateStr.toLowerCase();
+      return cleanEntry.includes(day) && cleanEntry.includes(month.toLowerCase()) && cleanEntry.includes(year);
+    }
+
+    return entryDateStr.toLowerCase().includes(filterDateIso);
   };
 
   const fetchJurnal = useCallback(async (showGlobalSpinner = true) => {
@@ -361,8 +381,14 @@ export default function Home() {
 
   const confirmDelete = async () => {
     if (!entryToDelete) return;
-    const id = entryToDelete.ID;
+    const entry = entryToDelete;
+    const id = entry.ID;
+    const isSynced = entry.synced;
+    const rowNum = entry._rowNum;
     
+    // Close modal instantly
+    closeDeleteModal();
+
     // Remove locally
     const updated = entries.filter((e) => e.ID !== id);
     setEntries(updated);
@@ -371,13 +397,14 @@ export default function Home() {
       localStorage.setItem("jurnal_entries", JSON.stringify(updated));
     }
 
-    if (entryToDelete.synced) {
+    if (isSynced) {
+      showToast("Menghapus jurnal dari Google Sheet...", "info");
       try {
-        const res = await fetch(`/api/jurnal?id=${id || entryToDelete._rowNum}`, {
+        const res = await fetch(`/api/jurnal?id=${id || rowNum}`, {
           method: "DELETE",
         });
         if (!res.ok) throw new Error("Gagal menghapus jurnal di sheet");
-        showToast("Jurnal berhasil dihapus dari Google Sheet!");
+        showToast("Jurnal berhasil dihapus dari Google Sheet!", "success");
       } catch (error) {
         console.error(error);
         showToast("Gagal menghapus di Google Sheet, tetapi dihapus secara lokal.", "warning");
@@ -385,7 +412,6 @@ export default function Home() {
     } else {
       showToast("Jurnal berhasil dihapus secara lokal!", "success");
     }
-    closeDeleteModal();
   };
 
   // Sync individual row to Apps Script
@@ -428,7 +454,6 @@ export default function Home() {
       }
 
       showToast("Jurnal berhasil disinkronkan ke Google Sheet!");
-      await fetchJurnal(false);
     } catch (e) {
       console.error(e);
       showToast("Gagal sinkronisasi data ke Google Sheets.", "error");
@@ -437,15 +462,21 @@ export default function Home() {
     }
   };
 
-  // Filter entries based on search
+  // Filter entries based on search and filters
   const filteredEntries = parsedEntries.filter((entry) => {
     const query = searchQuery.toLowerCase();
-    return (
+    const matchesQuery = !query || (
       (entry["Hari, tanggal"] || "").toLowerCase().includes(query) ||
       (entry["Materi Pokok"] || "").toLowerCase().includes(query) ||
       (entry["Kegiatan Pembelajaran"] || "").toLowerCase().includes(query) ||
       (entry["Kelas"] || "").toLowerCase().includes(query)
     );
+
+    const matchesClass = !classFilter || entry["Kelas"] === classFilter;
+
+    const matchesDate = matchesDateFilter(entry["Hari, tanggal"], dateFilter);
+
+    return matchesQuery && matchesClass && matchesDate;
   });
 
   return (
@@ -481,21 +512,65 @@ export default function Home() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <div className="flex gap-sm">
-            <button
-              onClick={() => showToast("Urutkan tanggal akan segera hadir!", "info")}
-              className="bg-surface border border-outline rounded p-3 text-on-surface-variant flex items-center gap-xs hover:bg-surface-container-high transition-colors"
-            >
-              <span className="material-symbols-outlined text-[20px]">calendar_today</span>
-              <span className="font-label-caps text-label-caps hidden sm:inline">Tanggal</span>
-            </button>
-            <button
-              onClick={() => showToast("Filter kelas akan segera hadir!", "info")}
-              className="bg-surface border border-outline rounded p-3 text-on-surface-variant flex items-center gap-xs hover:bg-surface-container-high transition-colors"
-            >
-              <span className="material-symbols-outlined text-[20px]">filter_list</span>
-              <span className="font-label-caps text-label-caps hidden sm:inline">Kelas</span>
-            </button>
+          <div className="flex flex-wrap gap-sm">
+            {/* Filter Tanggal */}
+            <div className="relative flex items-center">
+              <span className="material-symbols-outlined absolute left-3 text-on-surface-variant text-[20px] pointer-events-none">
+                calendar_today
+              </span>
+              <input
+                type="date"
+                value={dateFilter}
+                onClick={(e) => {
+                  try {
+                    e.target.showPicker();
+                  } catch (err) {}
+                }}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="pl-10 pr-8 py-2.5 bg-surface border border-outline rounded font-body-md text-body-md text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all w-full sm:w-44"
+                title="Filter Tanggal"
+              />
+              {dateFilter && (
+                <button
+                  onClick={() => setDateFilter("")}
+                  className="absolute right-2 text-on-surface-variant hover:text-error p-1 rounded-full hover:bg-surface-container-high transition-colors"
+                  title="Hapus Filter"
+                >
+                  <span className="material-symbols-outlined text-[16px]">close</span>
+                </button>
+              )}
+            </div>
+
+            {/* Filter Kelas */}
+            <div className="relative flex items-center">
+              <span className="material-symbols-outlined absolute left-3 text-on-surface-variant text-[20px] pointer-events-none">
+                filter_list
+              </span>
+              <select
+                value={classFilter}
+                onChange={(e) => setClassFilter(e.target.value)}
+                className={`pl-10 ${classFilter ? "pr-10" : "pr-8"} py-2.5 bg-surface border border-outline rounded font-body-md text-body-md text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 outline-none transition-all appearance-none cursor-pointer w-full sm:w-36`}
+                title="Filter Kelas"
+              >
+                <option value="">Semua Kelas</option>
+                {classesList.map((cls) => (
+                  <option key={cls} value={cls}>Kelas {cls}</option>
+                ))}
+              </select>
+              {classFilter ? (
+                <button
+                  onClick={() => setClassFilter("")}
+                  className="absolute right-2 text-on-surface-variant hover:text-error p-1 rounded-full hover:bg-surface-container-high transition-colors"
+                  title="Hapus Filter"
+                >
+                  <span className="material-symbols-outlined text-[16px]">close</span>
+                </button>
+              ) : (
+                <span className="material-symbols-outlined absolute right-2 text-on-surface-variant text-[18px] pointer-events-none">
+                  arrow_drop_down
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -701,7 +776,7 @@ export default function Home() {
       {/* Floating Action Button */}
       <button
         onClick={openCreateModal}
-        className="fixed bottom-24 right-container-margin md:bottom-lg bg-primary-container text-on-primary-container w-14 h-14 rounded-full flex items-center justify-center shadow-md hover:scale-105 active:scale-95 transition-all z-40 group"
+        className="fixed bottom-[92px] right-container-margin md:bottom-8 md:right-8 bg-primary text-on-primary w-14 h-14 rounded-full shadow-lg flex items-center justify-center hover:bg-primary-container hover:shadow-xl transition-all duration-200 z-40 active:scale-95 animate-fade-in group"
       >
         <span className="material-symbols-outlined text-[28px] group-hover:rotate-90 transition-transform duration-300">
           add
@@ -740,6 +815,11 @@ export default function Home() {
                       <input
                         type="date"
                         value={dateInput}
+                        onClick={(e) => {
+                          try {
+                            e.target.showPicker();
+                          } catch (err) {}
+                        }}
                         onChange={handleDateChange}
                         className="bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md w-full sm:w-auto"
                       />

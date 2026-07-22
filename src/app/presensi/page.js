@@ -443,7 +443,7 @@ function PresensiContent() {
   if (!kelasParam) {
     return (
       <main className="flex-grow px-container-margin py-md max-w-7xl mx-auto w-full">
-        <div className="mb-lg">
+        <div className="mb-lg text-center">
           <h2 className="font-display text-display text-primary">Presensi Kelas</h2>
           <p className="font-body-md text-body-md text-on-surface-variant mt-1">
             Pilih kelas terlebih dahulu untuk mulai mengambil presensi siswa.
