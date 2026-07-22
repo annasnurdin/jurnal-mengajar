@@ -47,6 +47,58 @@ export default function ClientLayout({ children }) {
   const [toast, setToast] = useState(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [syncKey, setSyncKey] = useState(0);
+  const [teacherName, setTeacherName] = useState("Guru Terbaik");
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileNameInput, setProfileNameInput] = useState("");
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/profile")
+      .then(res => res.json())
+      .then(data => {
+        if (data.displayName) {
+          setTeacherName(data.displayName);
+        }
+      })
+      .catch(err => console.error("Gagal memuat profil:", err));
+  }, []);
+
+  const openProfileModal = () => {
+    setProfileNameInput(teacherName);
+    setIsProfileModalOpen(true);
+  };
+
+  const handleProfileSubmit = async (e) => {
+    e.preventDefault();
+    if (!profileNameInput.trim()) {
+      showToast("Nama tidak boleh kosong", "error");
+      return;
+    }
+
+    setIsSavingProfile(true);
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ displayName: profileNameInput.trim() })
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Gagal memperbarui profil");
+      }
+
+      const result = await res.json();
+      setTeacherName(result.displayName);
+      showToast("Profil berhasil diperbarui!", "success");
+      setIsProfileModalOpen(false);
+    } catch (err) {
+      console.error(err);
+      showToast(err.message, "error");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
 
   const showToast = (message, type = "info") => {
     setToast({ message, type });
@@ -414,16 +466,21 @@ export default function ClientLayout({ children }) {
       {/* NavigationDrawer (Web/Desktop Only) */}
       <aside className="hidden md:flex fixed inset-y-0 left-0 z-[60] flex-col py-lg h-full w-72 rounded-r-xl bg-surface shadow-lg border-r border-outline-variant">
         {/* Profile Header */}
-        <div className="px-container-margin mb-8 flex items-center gap-4">
+        <div
+          onClick={openProfileModal}
+          className="px-container-margin mb-8 flex items-center gap-4 cursor-pointer hover:bg-surface-container-high transition-colors rounded-xl p-2"
+          title="Atur Profil"
+        >
           <img
             alt="Foto Profil Guru"
-            className="w-12 h-12 rounded-full object-cover border border-outline-variant"
+            className="w-12 h-12 rounded-full object-cover border border-outline-variant flex-shrink-0"
             src="https://lh3.googleusercontent.com/aida-public/AB6AXuAvojQwEtGFaVdGzsoleYLUMtjK6m88IoL7ytbZq_yTAq6kJa_hs08rjN3cTJM5b-edFscwNn6DQLKqcfUJsGv66f0fghI75Zdw58jtjyCpMvKE6-kSOWhQRjC_MKThVHVYzBRbpgcg5GXScP8271mdyauSXWEHaiPkFBp6Jaz0bKjZdS2qZoRmzpifJknU23Qgk0RRLEdUGICMQ6yyLaPLDtmKvnhBhGwp6bfnaxZU_q5D2UaHjZqy2_VAcVJrC_iaTzVLYDaoZw"
           />
-          <div>
-            <h2 className="font-h2 text-h2 font-bold text-primary">Budi Santoso, S.Pd.</h2>
-            <p className="font-caption text-caption text-on-surface-variant mt-1">NIP: 198501012010011002</p>
-            <p className="font-caption text-caption text-primary">Guru Madya</p>
+          <div className="min-w-0 flex-grow">
+            <h2 className="font-h2 text-h2 font-bold text-primary truncate" title={teacherName}>
+              {teacherName}
+            </h2>
+            <p className="font-caption text-caption text-on-surface-variant hover:underline mt-0.5">Atur Profil</p>
           </div>
         </div>
         {/* Nav Items */}
@@ -562,6 +619,70 @@ export default function ClientLayout({ children }) {
             )}
           </Link>
         </nav>
+      )}
+      {/* Profile Modal */}
+      {isProfileModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-surface w-[95%] sm:w-full max-w-2xl rounded-xl shadow-2xl border border-outline-variant overflow-hidden flex flex-col max-h-[90vh] animate-fade-in">
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-surface-container-low border-b border-outline-variant flex items-center justify-between">
+              <h2 className="font-h2 text-h2 text-on-surface font-semibold">Atur Profil</h2>
+              <button
+                onClick={() => setIsProfileModalOpen(false)}
+                className="text-on-surface-variant hover:bg-surface-container-high p-2 rounded-full transition-all flex items-center justify-center active:scale-95 cursor-pointer"
+                aria-label="Close modal"
+                type="button"
+                disabled={isSavingProfile}
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 flex-1 overflow-y-auto font-body-md text-body-md text-on-surface-variant">
+              <form id="profileForm" onSubmit={handleProfileSubmit} className="space-y-4">
+                <div className="flex flex-col gap-xs">
+                  <label className="font-label-caps text-label-caps text-on-surface-variant">
+                    Nama Lengkap / Tampilan <span className="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={profileNameInput}
+                    onChange={(e) => setProfileNameInput(e.target.value)}
+                    className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
+                    placeholder="Masukkan nama tampilan..."
+                    disabled={isSavingProfile}
+                    autoFocus
+                  />
+                </div>
+              </form>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 bg-surface-container-low border-t border-outline-variant flex items-center justify-end gap-sm">
+              <button
+                type="button"
+                onClick={() => setIsProfileModalOpen(false)}
+                className="px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high rounded font-label-caps text-label-caps transition-colors cursor-pointer"
+                disabled={isSavingProfile}
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                form="profileForm"
+                className="px-4 py-2 bg-primary text-on-primary rounded font-label-caps text-label-caps shadow-sm hover:bg-primary/95 transition-colors flex items-center gap-xs cursor-pointer disabled:opacity-50"
+                disabled={isSavingProfile}
+              >
+                {isSavingProfile && (
+                  <span className="material-symbols-outlined text-[16px] animate-spin">sync</span>
+                )}
+                Simpan
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

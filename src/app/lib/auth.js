@@ -23,7 +23,7 @@ export async function loginWithSupabase(email, password) {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error_description || errorData.error || "Gagal melakukan autentikasi");
+    throw new Error(errorData.error_description || errorData.error || errorData.msg || errorData.message || "Gagal melakukan autentikasi");
   }
 
   return await response.json();
