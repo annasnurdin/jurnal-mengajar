@@ -1,8 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-
-let isJurnalSynced = false;
+import { useState, useEffect, useCallback, useRef } from "react";
 
 export default function Home() {
   const [entries, setEntries] = useState(() => {
@@ -165,8 +163,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (isJurnalSynced) return;
-    isJurnalSynced = true;
+    let active = true;
 
     const timer = setTimeout(() => {
       let hasCached = false;
@@ -179,9 +176,15 @@ export default function Home() {
           } catch (e) {}
         }
       }
-      fetchJurnal(!hasCached);
+      if (active && !hasCached) {
+        fetchJurnal(true);
+      }
     }, 0);
-    return () => clearTimeout(timer);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [fetchJurnal]);
 
   useEffect(() => {

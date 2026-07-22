@@ -46,6 +46,7 @@ export default function ClientLayout({ children }) {
   const pathname = usePathname();
   const [toast, setToast] = useState(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [syncKey, setSyncKey] = useState(0);
 
   const showToast = (message, type = "info") => {
     setToast({ message, type });
@@ -64,10 +65,12 @@ export default function ClientLayout({ children }) {
         const storedSiswa = localStorage.getItem("daftar_siswa");
         const storedPresensi = localStorage.getItem("riwayat_presensi");
         const storedMateri = localStorage.getItem("daftar_materi_pokok");
+        const storedJurnal = localStorage.getItem("jurnal_entries");
 
         let isSiswaEmpty = true;
         let isPresensiEmpty = true;
         let isMateriEmpty = true;
+        let isJurnalEmpty = true;
 
         if (storedSiswa) {
           try {
@@ -96,12 +99,22 @@ export default function ClientLayout({ children }) {
           } catch (e) {}
         }
 
-        if (isSiswaEmpty || isPresensiEmpty || isMateriEmpty) {
+        if (storedJurnal) {
+          try {
+            const parsed = JSON.parse(storedJurnal);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              isJurnalEmpty = false;
+            }
+          } catch (e) {}
+        }
+
+        if (isSiswaEmpty || isPresensiEmpty || isMateriEmpty || isJurnalEmpty) {
           console.log("Seed data is empty or incomplete. Fetching from APIs...");
-          const [resSiswa, resPresensi, resMateri] = await Promise.all([
+          const [resSiswa, resPresensi, resMateri, resJurnal] = await Promise.all([
             fetch("/api/siswa").catch(() => null),
             fetch("/api/presensi").catch(() => null),
-            fetch("/api/materi-pokok").catch(() => null)
+            fetch("/api/materi-pokok").catch(() => null),
+            fetch("/api/jurnal").catch(() => null)
           ]);
 
           let mappedSiswa = [];
@@ -150,9 +163,37 @@ export default function ClientLayout({ children }) {
             }
           }
 
+          let mappedJurnal = [];
+          if (resJurnal && resJurnal.ok) {
+            const dataJurnal = await resJurnal.json().catch(() => ({}));
+            if (dataJurnal && Array.isArray(dataJurnal.data)) {
+              const formatHariTanggal = (dateStr) => {
+                if (!dateStr) return "";
+                const date = new Date(dateStr);
+                const days = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+                const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "Okt", "Nov", "Des"];
+                const dayName = days[date.getDay()];
+                const dayNum = date.getDate();
+                const monthName = months[date.getMonth()];
+                const year = date.getFullYear();
+                return `${dayName}, ${dayNum < 10 ? '0' + dayNum : dayNum} ${monthName} ${year}`;
+              };
+              mappedJurnal = dataJurnal.data.map(item => {
+                const rawDate = item["Hari, tanggal"];
+                const formattedDate = rawDate && !rawDate.includes(",") ? formatHariTanggal(rawDate) : rawDate;
+                return { ...item, "Hari, tanggal": formattedDate, synced: true };
+              });
+            }
+          }
+
           localStorage.setItem("daftar_siswa", JSON.stringify(mappedSiswa));
           localStorage.setItem("riwayat_presensi", JSON.stringify(mappedPresensi));
           localStorage.setItem("daftar_materi_pokok", JSON.stringify(mappedMateri));
+          localStorage.setItem("jurnal_entries", JSON.stringify(mappedJurnal));
+
+          const active = mappedSiswa.filter((s) => s.class).map((s) => s.class);
+          const unique = [...new Set(active)].sort();
+          localStorage.setItem("daftar_kelas", JSON.stringify(unique));
         } else {
           console.log("Cached data found. Bypassing API fetches.");
         }
@@ -167,6 +208,12 @@ export default function ClientLayout({ children }) {
         }
         if (!localStorage.getItem("daftar_materi_pokok")) {
           localStorage.setItem("daftar_materi_pokok", JSON.stringify([]));
+        }
+        if (!localStorage.getItem("jurnal_entries")) {
+          localStorage.setItem("jurnal_entries", JSON.stringify([]));
+        }
+        if (!localStorage.getItem("daftar_kelas")) {
+          localStorage.setItem("daftar_kelas", JSON.stringify([]));
         }
       } finally {
         setIsInitializing(false);
@@ -203,10 +250,11 @@ export default function ClientLayout({ children }) {
   const handleManualSync = async () => {
     showToast("Sinkronisasi data dari Google Sheet...", "info");
     try {
-      const [resSiswa, resPresensi, resMateri] = await Promise.all([
+      const [resSiswa, resPresensi, resMateri, resJurnal] = await Promise.all([
         fetch("/api/siswa").catch(() => null),
         fetch("/api/presensi").catch(() => null),
-        fetch("/api/materi-pokok").catch(() => null)
+        fetch("/api/materi-pokok").catch(() => null),
+        fetch("/api/jurnal").catch(() => null)
       ]);
 
       let mappedSiswa = [];
@@ -255,16 +303,40 @@ export default function ClientLayout({ children }) {
         }
       }
 
+      let mappedJurnal = [];
+      if (resJurnal && resJurnal.ok) {
+        const dataJurnal = await resJurnal.json().catch(() => ({}));
+        if (dataJurnal && Array.isArray(dataJurnal.data)) {
+          const formatHariTanggal = (dateStr) => {
+            if (!dateStr) return "";
+            const date = new Date(dateStr);
+            const days = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+            const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "Okt", "Nov", "Des"];
+            const dayName = days[date.getDay()];
+            const dayNum = date.getDate();
+            const monthName = months[date.getMonth()];
+            const year = date.getFullYear();
+            return `${dayName}, ${dayNum < 10 ? '0' + dayNum : dayNum} ${monthName} ${year}`;
+          };
+          mappedJurnal = dataJurnal.data.map(item => {
+            const rawDate = item["Hari, tanggal"];
+            const formattedDate = rawDate && !rawDate.includes(",") ? formatHariTanggal(rawDate) : rawDate;
+            return { ...item, "Hari, tanggal": formattedDate, synced: true };
+          });
+        }
+      }
+
       localStorage.setItem("daftar_siswa", JSON.stringify(mappedSiswa));
       localStorage.setItem("riwayat_presensi", JSON.stringify(mappedPresensi));
       localStorage.setItem("daftar_materi_pokok", JSON.stringify(mappedMateri));
+      localStorage.setItem("jurnal_entries", JSON.stringify(mappedJurnal));
       
       const active = mappedSiswa.filter((s) => s.class).map((s) => s.class);
       const unique = [...new Set(active)].sort();
       localStorage.setItem("daftar_kelas", JSON.stringify(unique));
 
-      showToast("Sinkronisasi selesai! Memuat ulang halaman...", "success");
-      setTimeout(() => window.location.reload(), 1000);
+      setSyncKey((prev) => prev + 1);
+      showToast("Sinkronisasi data selesai!", "success");
     } catch (e) {
       console.error(e);
       showToast("Sinkronisasi gagal!", "error");
@@ -327,14 +399,6 @@ export default function ClientLayout({ children }) {
           >
             <span className="material-symbols-outlined">sync</span>
           </button>
-          {(!isTambahSiswa || true) && (
-            <button
-              onClick={() => showToast("Fitur Pencarian Aktif!", "info")}
-              className={`${isTambahSiswa ? "hidden md:flex" : "flex"} text-primary hover:bg-surface-container-high transition-colors p-2 rounded-full items-center justify-center`}
-            >
-              <span className="material-symbols-outlined">search</span>
-            </button>
-          )}
           <button
             onClick={handleLogout}
             className="text-error hover:bg-error-container/20 transition-colors p-2 rounded-full flex items-center justify-center"
@@ -419,7 +483,7 @@ export default function ClientLayout({ children }) {
       </aside>
 
       {/* Page Canvas Container */}
-      <div key={pathname} className="flex-grow flex flex-col animate-fade-in">
+      <div key={`${pathname}-${syncKey}`} className="flex-grow flex flex-col animate-fade-in">
         {children}
       </div>
 
