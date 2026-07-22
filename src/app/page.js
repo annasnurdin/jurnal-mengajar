@@ -755,7 +755,7 @@ export default function Home() {
                       />
                     </div>
                     <p className="font-caption text-caption text-on-surface-variant mt-1">
-                      Pilih penanggalan tanggal di sebelah kiri untuk otomatisasi hari, atau ketik langsung di kolom teks.
+                      Tanggal dapat diberi keterangan
                     </p>
                   </div>
 
@@ -807,22 +807,21 @@ export default function Home() {
                     <label className="font-label-caps text-label-caps text-on-surface-variant">
                       Materi Pokok <span className="text-error">*</span>
                     </label>
-                    <input
-                      type="text"
+                    <select
                       required
-                      placeholder="Contoh: Aljabar Linier Dasar"
-                      list="materi-datalist"
                       value={formData["Materi Pokok"]}
                       onChange={(e) =>
                         setFormData((prev) => ({ ...prev, "Materi Pokok": e.target.value }))
                       }
                       className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
-                    />
-                    <datalist id="materi-datalist">
+                    >
+                      <option value="" disabled>-- Pilih Materi Pokok --</option>
                       {materiList.map((m) => (
-                        <option key={m.id} value={m.name} />
+                        <option key={m.id} value={m.name}>
+                          {m.name}
+                        </option>
                       ))}
-                    </datalist>
+                    </select>
                   </div>
 
                   {/* Kegiatan Pembelajaran */}
