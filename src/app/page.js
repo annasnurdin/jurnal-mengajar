@@ -57,6 +57,9 @@ export default function Home() {
   // Track individual row syncing state
   const [syncingIds, setSyncingIds] = useState({});
 
+  // Materi Pokok list state
+  const [materiList, setMateriList] = useState([]);
+
   // Form States
   const [dateInput, setDateInput] = useState("");
   const [formData, setFormData] = useState({
@@ -196,6 +199,43 @@ export default function Home() {
         } catch (e) {
           console.error(e);
         }
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storedMateri = localStorage.getItem("daftar_materi_pokok");
+      if (storedMateri) {
+        try {
+          const parsed = JSON.parse(storedMateri);
+          if (Array.isArray(parsed)) {
+            const timer = setTimeout(() => {
+              setMateriList(parsed);
+            }, 0);
+            return () => clearTimeout(timer);
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      } else {
+        // Fetch from API directly if not cached
+        fetch("/api/materi-pokok")
+          .then((res) => res.json())
+          .then((result) => {
+            if (result.data) {
+              const mapped = result.data.map((item) => ({
+                id: item.ID || item._rowNum,
+                name: item["Materi Pokok"] || "",
+                _rowNum: item._rowNum
+              }));
+              const timer = setTimeout(() => {
+                setMateriList(mapped);
+              }, 0);
+              localStorage.setItem("daftar_materi_pokok", JSON.stringify(mapped));
+            }
+          })
+          .catch((e) => console.error("Gagal load materi pokok", e));
       }
     }
   }, []);
@@ -768,12 +808,18 @@ export default function Home() {
                       type="text"
                       required
                       placeholder="Contoh: Aljabar Linier Dasar"
+                      list="materi-datalist"
                       value={formData["Materi Pokok"]}
                       onChange={(e) =>
                         setFormData((prev) => ({ ...prev, "Materi Pokok": e.target.value }))
                       }
                       className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
                     />
+                    <datalist id="materi-datalist">
+                      {materiList.map((m) => (
+                        <option key={m.id} value={m.name} />
+                      ))}
+                    </datalist>
                   </div>
 
                   {/* Kegiatan Pembelajaran */}

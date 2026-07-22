@@ -63,9 +63,11 @@ export default function ClientLayout({ children }) {
       try {
         const storedSiswa = localStorage.getItem("daftar_siswa");
         const storedPresensi = localStorage.getItem("riwayat_presensi");
+        const storedMateri = localStorage.getItem("daftar_materi_pokok");
 
         let isSiswaEmpty = true;
         let isPresensiEmpty = true;
+        let isMateriEmpty = true;
 
         if (storedSiswa) {
           try {
@@ -85,11 +87,21 @@ export default function ClientLayout({ children }) {
           } catch (e) {}
         }
 
-        if (isSiswaEmpty || isPresensiEmpty) {
+        if (storedMateri) {
+          try {
+            const parsed = JSON.parse(storedMateri);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              isMateriEmpty = false;
+            }
+          } catch (e) {}
+        }
+
+        if (isSiswaEmpty || isPresensiEmpty || isMateriEmpty) {
           console.log("Seed data is empty or incomplete. Fetching from APIs...");
-          const [resSiswa, resPresensi] = await Promise.all([
+          const [resSiswa, resPresensi, resMateri] = await Promise.all([
             fetch("/api/siswa").catch(() => null),
-            fetch("/api/presensi").catch(() => null)
+            fetch("/api/presensi").catch(() => null),
+            fetch("/api/materi-pokok").catch(() => null)
           ]);
 
           let mappedSiswa = [];
@@ -126,9 +138,21 @@ export default function ClientLayout({ children }) {
             }
           }
 
+          let mappedMateri = [];
+          if (resMateri && resMateri.ok) {
+            const dataMateri = await resMateri.json().catch(() => ({}));
+            if (dataMateri && Array.isArray(dataMateri.data)) {
+              mappedMateri = dataMateri.data.map((item) => ({
+                id: item.ID || item._rowNum,
+                name: item["Materi Pokok"] || "",
+                _rowNum: item._rowNum
+              }));
+            }
+          }
 
           localStorage.setItem("daftar_siswa", JSON.stringify(mappedSiswa));
           localStorage.setItem("riwayat_presensi", JSON.stringify(mappedPresensi));
+          localStorage.setItem("daftar_materi_pokok", JSON.stringify(mappedMateri));
         } else {
           console.log("Cached data found. Bypassing API fetches.");
         }
@@ -140,6 +164,9 @@ export default function ClientLayout({ children }) {
         }
         if (!localStorage.getItem("riwayat_presensi")) {
           localStorage.setItem("riwayat_presensi", JSON.stringify([]));
+        }
+        if (!localStorage.getItem("daftar_materi_pokok")) {
+          localStorage.setItem("daftar_materi_pokok", JSON.stringify([]));
         }
       } finally {
         setIsInitializing(false);
@@ -167,14 +194,8 @@ export default function ClientLayout({ children }) {
 
   if (isInitializing) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background text-on-background">
-        <div className="flex flex-col items-center justify-center p-xl gap-md text-on-surface-variant">
-          <span className="material-symbols-outlined text-[48px] animate-spin text-primary">sync</span>
-          <p className="font-body-lg text-body-lg font-medium">Menyiapkan data aplikasi...</p>
-          <p className="font-caption text-caption text-on-surface-variant max-w-xs text-center mt-1">
-            Mengambil data referensi dari Google Sheets untuk pertama kali...
-          </p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-background text-on-background">
+        <span className="material-symbols-outlined text-[48px] animate-spin text-primary">sync</span>
       </div>
     );
   }
@@ -182,9 +203,10 @@ export default function ClientLayout({ children }) {
   const handleManualSync = async () => {
     showToast("Sinkronisasi data dari Google Sheet...", "info");
     try {
-      const [resSiswa, resPresensi] = await Promise.all([
+      const [resSiswa, resPresensi, resMateri] = await Promise.all([
         fetch("/api/siswa").catch(() => null),
-        fetch("/api/presensi").catch(() => null)
+        fetch("/api/presensi").catch(() => null),
+        fetch("/api/materi-pokok").catch(() => null)
       ]);
 
       let mappedSiswa = [];
@@ -221,8 +243,21 @@ export default function ClientLayout({ children }) {
         }
       }
 
+      let mappedMateri = [];
+      if (resMateri && resMateri.ok) {
+        const dataMateri = await resMateri.json().catch(() => ({}));
+        if (dataMateri && Array.isArray(dataMateri.data)) {
+          mappedMateri = dataMateri.data.map((item) => ({
+            id: item.ID || item._rowNum,
+            name: item["Materi Pokok"] || "",
+            _rowNum: item._rowNum
+          }));
+        }
+      }
+
       localStorage.setItem("daftar_siswa", JSON.stringify(mappedSiswa));
       localStorage.setItem("riwayat_presensi", JSON.stringify(mappedPresensi));
+      localStorage.setItem("daftar_materi_pokok", JSON.stringify(mappedMateri));
       
       const active = mappedSiswa.filter((s) => s.class).map((s) => s.class);
       const unique = [...new Set(active)].sort();
