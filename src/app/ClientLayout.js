@@ -149,12 +149,21 @@ export default function ClientLayout({ children }) {
     initializeData();
   }, []);
 
+  const isLoginPage = pathname === "/login";
   const isJurnalActive = pathname === "/";
   const isSiswaActive = pathname.startsWith("/siswa");
   const isKelasActive = pathname.startsWith("/kelas") || pathname.startsWith("/presensi");
   const isRekapActive = pathname.startsWith("/rekap-presensi");
   const isManajemenActive = pathname === "/manajemen";
   const isTambahSiswa = pathname === "/siswa/tambah-siswa";
+
+  if (isLoginPage) {
+    return (
+      <div className="min-h-screen bg-background text-on-background">
+        {children}
+      </div>
+    );
+  }
 
   if (isInitializing) {
     return (
@@ -227,6 +236,22 @@ export default function ClientLayout({ children }) {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      const res = await fetch("/api/logout", {
+        method: "POST",
+      });
+      if (res.ok) {
+        window.location.href = "/login";
+      } else {
+        showToast("Gagal keluar", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      showToast("Gagal keluar", "error");
+    }
+  };
+
   return (
     <div className={`min-h-screen flex flex-col pt-16 ${isTambahSiswa ? "pb-0" : "pb-20"} md:pb-0 md:pl-72 bg-background text-on-background`}>
       {/* Toast Notification */}
@@ -275,6 +300,13 @@ export default function ClientLayout({ children }) {
               <span className="material-symbols-outlined">search</span>
             </button>
           )}
+          <button
+            onClick={handleLogout}
+            className="text-error hover:bg-error-container/20 transition-colors p-2 rounded-full flex items-center justify-center"
+            title="Keluar"
+          >
+            <span className="material-symbols-outlined">logout</span>
+          </button>
         </div>
       </header>
 
@@ -340,11 +372,19 @@ export default function ClientLayout({ children }) {
             <span className={`material-symbols-outlined ${isManajemenActive ? "icon-fill" : ""}`}>settings</span>
             <span className="font-body-md text-body-md">Atur Data</span>
           </Link>
+          
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-3 mx-2 px-4 py-3 rounded-full transition-all duration-200 text-error hover:bg-error-container/20 hover:text-error mt-auto cursor-pointer"
+          >
+            <span className="material-symbols-outlined">logout</span>
+            <span className="font-body-md text-body-md font-bold">Keluar</span>
+          </button>
         </nav>
       </aside>
 
       {/* Page Canvas Container */}
-      <div className="flex-grow flex flex-col">
+      <div key={pathname} className="flex-grow flex flex-col animate-fade-in">
         {children}
       </div>
 

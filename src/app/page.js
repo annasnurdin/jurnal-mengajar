@@ -1,41 +1,22 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
-
-const initialDummyData = [
-  {
-    _rowNum: 1,
-    "Hari, tanggal": "Senin, 12 Okt 2023",
-    "Jam ke-": "1-2",
-    "Kelas": "7A",
-    "Materi Pokok": "Aljabar Linier Dasar",
-    "Kegiatan Pembelajaran": "Pengenalan konsep variabel dan persamaan linear satu variabel beserta contoh aplikasinya dalam kehidupan sehari-hari.",
-    "Kehadiran": "H:30, A:2"
-  },
-  {
-    _rowNum: 2,
-    "Hari, tanggal": "Senin, 12 Okt 2023",
-    "Jam ke-": "4-5",
-    "Kelas": "8C",
-    "Materi Pokok": "Statistika Dasar",
-    "Kegiatan Pembelajaran": "Praktik pengumpulan data di lapangan dan penyusunan tabel distribusi frekuensi tunggal.",
-    "Kehadiran": "H:32, I:1"
-  },
-  {
-    _rowNum: 3,
-    "Hari, tanggal": "Jumat, 09 Okt 2023",
-    "Jam ke-": "1-2",
-    "Kelas": "7A",
-    "Materi Pokok": "Review UTS",
-    "Kegiatan Pembelajaran": "Membahas soal-soal Ujian Tengah Semester yang banyak salah dijawab oleh siswa.",
-    "Kehadiran": "H:32"
-  }
-];
 
 export default function Home() {
-  const [entries, setEntries] = useState([]);
-  const [parsedEntries, setParsedEntries] = useState([]);
+  const [entries, setEntries] = useState(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("jurnal_entries");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) return parsed;
+        } catch (e) {}
+      }
+    }
+    return [];
+  });
+  const [parsedEntries, setParsedEntries] = useState(entries);
   const [metadata, setMetadata] = useState({
     mataPelajaran: "Matematika",
     kelas: "7A",
@@ -43,7 +24,20 @@ export default function Home() {
     tahunAjaran: "2023/2024",
   });
   
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("jurnal_entries");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return false;
+          }
+        } catch (e) {}
+      }
+    }
+    return true;
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -56,15 +50,20 @@ export default function Home() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [entryToDelete, setEntryToDelete] = useState(null);
 
+  // Classes list state from localStorage
+  const [classesList, setClassesList] = useState([]);
+
+  // Track individual row syncing state
+  const [syncingIds, setSyncingIds] = useState({});
+
   // Form States
   const [dateInput, setDateInput] = useState("");
   const [formData, setFormData] = useState({
     "Hari, tanggal": "",
-    "Jam ke-": "",
+    "Jam ke-": "1",
     "Kelas": "7A",
     "Materi Pokok": "",
     "Kegiatan Pembelajaran": "",
-    "Kehadiran": "",
   });
 
   // Toast Notification State
@@ -102,62 +101,97 @@ export default function Home() {
     return `${dayName}, ${dayNum < 10 ? '0' + dayNum : dayNum} ${monthName} ${year}`;
   };
 
-  // Parse attendance string into structured badges
-  const parseKehadiran = (str) => {
-    if (!str) return [];
-    const badges = [];
-    const hMatch = str.match(/H\s*:\s*(\d+)/i) || str.match(/Hadir\s*:\s*(\d+)/i);
-    const sMatch = str.match(/S\s*:\s*(\d+)/i) || str.match(/Sakit\s*:\s*(\d+)/i);
-    const iMatch = str.match(/I\s*:\s*(\d+)/i) || str.match(/Izin\s*:\s*(\d+)/i);
-    const aMatch = str.match(/A\s*:\s*(\d+)/i) || str.match(/Alpa\s*:\s*(\d+)/i) || str.match(/Absen\s*:\s*(\d+)/i);
-
-    if (hMatch) badges.push({ label: `H:${hMatch[1]}`, type: "hadir", title: "Hadir" });
-    if (sMatch) badges.push({ label: `S:${sMatch[1]}`, type: "sakit", title: "Sakit" });
-    if (iMatch) badges.push({ label: `I:${iMatch[1]}`, type: "izin", title: "Izin" });
-    if (aMatch) badges.push({ label: `A:${aMatch[1]}`, type: "alpa", title: "Alpa" });
-
-    if (badges.length === 0) {
-      badges.push({ label: str, type: "default", title: "Kehadiran" });
+  const fetchJurnal = useCallback(async (showGlobalSpinner = true) => {
+    if (showGlobalSpinner) {
+      setIsLoading(true);
     }
-    return badges;
-  };
-
-  const renderKehadiranBadges = (str) => {
-    if (!str) return <span className="text-on-surface-variant font-caption text-caption">Tidak tercatat</span>;
-    const badges = parseKehadiran(str);
-    return (
-      <div className="flex gap-xs flex-wrap justify-center md:justify-start">
-        {badges.map((badge, idx) => {
-          let badgeClass = "bg-surface-container-low border border-outline-variant text-on-surface";
-          if (badge.type === "alpa") {
-            badgeClass = "bg-error-container text-on-error-container";
-          } else if (badge.type === "sakit") {
-            badgeClass = "bg-secondary-container text-on-secondary-container";
-          } else if (badge.type === "izin") {
-            badgeClass = "bg-tertiary-container text-on-tertiary-container";
+    try {
+      let localEntries = [];
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("jurnal_entries");
+        if (stored) {
+          try {
+            localEntries = JSON.parse(stored);
+          } catch (e) {
+            console.error(e);
           }
-          return (
-            <span
-              key={idx}
-              className={`${badgeClass} text-[10px] px-1.5 py-0.5 rounded-full font-semibold`}
-              title={badge.title}
-            >
-              {badge.label}
-            </span>
-          );
-        })}
-      </div>
-    );
-  };
+        }
+      }
 
-  // Simulate server fetch on component mount
+      const res = await fetch("/api/jurnal");
+      if (!res.ok) throw new Error("Gagal mengambil data jurnal");
+      const result = await res.json();
+      const sheetEntries = result.data || [];
+
+      // Merge sheet entries and local unsynced entries
+      const mergedMap = new Map();
+      sheetEntries.forEach(item => {
+        mergedMap.set(item.ID, { ...item, synced: true });
+      });
+      localEntries.forEach(item => {
+        if (!item.synced) {
+          mergedMap.set(item.ID, item);
+        }
+      });
+
+      const merged = Array.from(mergedMap.values());
+      if (typeof window !== "undefined") {
+        localStorage.setItem("jurnal_entries", JSON.stringify(merged));
+      }
+      setEntries(merged);
+      setParsedEntries(merged);
+    } catch (error) {
+      console.error(error);
+      showToast("Gagal memuat data dari Google Sheet. Menggunakan data lokal.", "error");
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("jurnal_entries");
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            setEntries(parsed);
+            setParsedEntries(parsed);
+          } catch (e) {}
+        }
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(() => {
-      setEntries(initialDummyData);
-      setParsedEntries(initialDummyData);
-      setIsLoading(false);
-    }, 600);
+      let hasCached = false;
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("jurnal_entries");
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            hasCached = Array.isArray(parsed) && parsed.length > 0;
+          } catch (e) {}
+        }
+      }
+      fetchJurnal(!hasCached);
+    }, 0);
     return () => clearTimeout(timer);
+  }, [fetchJurnal]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("daftar_kelas");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const timer = setTimeout(() => {
+              setClassesList(parsed);
+            }, 0);
+            return () => clearTimeout(timer);
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
   }, []);
 
   // Handle Date picker selection
@@ -174,14 +208,18 @@ export default function Home() {
   const openCreateModal = () => {
     setModalMode("create");
     setSelectedEntry(null);
-    setDateInput("");
+    const localToday = new Date();
+    const y = localToday.getFullYear();
+    const m = String(localToday.getMonth() + 1).padStart(2, '0');
+    const d = String(localToday.getDate()).padStart(2, '0');
+    const todayStr = `${y}-${m}-${d}`;
+    setDateInput(todayStr);
     setFormData({
-      "Hari, tanggal": "",
-      "Jam ke-": "",
-      "Kelas": "7A",
+      "Hari, tanggal": formatHariTanggal(todayStr),
+      "Jam ke-": "1",
+      "Kelas": classesList[0] || "7A",
       "Materi Pokok": "",
       "Kegiatan Pembelajaran": "",
-      "Kehadiran": "",
     });
     setIsModalOpen(true);
   };
@@ -192,18 +230,17 @@ export default function Home() {
     setSelectedEntry(entry);
     setFormData({
       "Hari, tanggal": entry["Hari, tanggal"] || "",
-      "Jam ke-": entry["Jam ke-"] || "",
-      "Kelas": entry["Kelas"] || "7A",
+      "Jam ke-": entry["Jam ke-"] ? entry["Jam ke-"].toString() : "1",
+      "Kelas": entry["Kelas"] || classesList[0] || "7A",
       "Materi Pokok": entry["Materi Pokok"] || "",
       "Kegiatan Pembelajaran": entry["Kegiatan Pembelajaran"] || "",
-      "Kehadiran": entry["Kehadiran"] || "",
     });
     setDateInput("");
     setIsModalOpen(true);
   };
 
-  // Submit form (Create or Update Locally)
-  const handleSubmit = async (e) => {
+  // Submit form (Save Locally)
+  const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData["Hari, tanggal"] || !formData["Materi Pokok"]) {
       showToast("Kolom Hari/Tanggal dan Materi Pokok wajib diisi!", "error");
@@ -211,25 +248,29 @@ export default function Home() {
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
+    try {
       if (modalMode === "create") {
         const newEntry = {
-          _rowNum: entries.length > 0 ? Math.max(...entries.map(e => e._rowNum)) + 1 : 1,
+          ID: crypto.randomUUID(),
           "Hari, tanggal": formData["Hari, tanggal"],
           "Jam ke-": formData["Jam ke-"],
           "Kelas": formData["Kelas"],
           "Materi Pokok": formData["Materi Pokok"],
           "Kegiatan Pembelajaran": formData["Kegiatan Pembelajaran"],
-          "Kehadiran": formData["Kehadiran"],
+          synced: false
         };
-        const updated = [...entries, newEntry];
+        const updated = [newEntry, ...entries];
         setEntries(updated);
         setParsedEntries(updated);
-        showToast("Jurnal berhasil ditambahkan!");
+        if (typeof window !== "undefined") {
+          localStorage.setItem("jurnal_entries", JSON.stringify(updated));
+        }
+        showToast("Jurnal disimpan secara lokal!");
       } else {
-        // Edit mode
         const updated = entries.map((entry) => {
-          if (entry._rowNum === selectedEntry._rowNum) {
+          const entryId = selectedEntry.ID || selectedEntry._rowNum;
+          const matchId = entry.ID || entry._rowNum;
+          if (matchId === entryId) {
             return {
               ...entry,
               "Hari, tanggal": formData["Hari, tanggal"],
@@ -237,18 +278,25 @@ export default function Home() {
               "Kelas": formData["Kelas"],
               "Materi Pokok": formData["Materi Pokok"],
               "Kegiatan Pembelajaran": formData["Kegiatan Pembelajaran"],
-              "Kehadiran": formData["Kehadiran"],
+              synced: false
             };
           }
           return entry;
         });
         setEntries(updated);
         setParsedEntries(updated);
-        showToast("Jurnal berhasil diperbarui!");
+        if (typeof window !== "undefined") {
+          localStorage.setItem("jurnal_entries", JSON.stringify(updated));
+        }
+        showToast("Perubahan disimpan secara lokal!");
       }
       setIsModalOpen(false);
+    } catch (error) {
+      console.error(error);
+      showToast("Gagal menyimpan jurnal.", "error");
+    } finally {
       setIsSubmitting(false);
-    }, 400);
+    }
   };
 
   // Open Jurnal Delete Confirmation Modal
@@ -262,13 +310,82 @@ export default function Home() {
     setEntryToDelete(null);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!entryToDelete) return;
-    const updated = entries.filter((e) => e._rowNum !== entryToDelete._rowNum);
+    const id = entryToDelete.ID;
+    
+    // Remove locally
+    const updated = entries.filter((e) => e.ID !== id);
     setEntries(updated);
     setParsedEntries(updated);
-    showToast("Jurnal berhasil dihapus!", "success");
+    if (typeof window !== "undefined") {
+      localStorage.setItem("jurnal_entries", JSON.stringify(updated));
+    }
+
+    if (entryToDelete.synced) {
+      try {
+        const res = await fetch(`/api/jurnal?id=${id || entryToDelete._rowNum}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) throw new Error("Gagal menghapus jurnal di sheet");
+        showToast("Jurnal berhasil dihapus dari Google Sheet!");
+      } catch (error) {
+        console.error(error);
+        showToast("Gagal menghapus di Google Sheet, tetapi dihapus secara lokal.", "warning");
+      }
+    } else {
+      showToast("Jurnal berhasil dihapus secara lokal!", "success");
+    }
     closeDeleteModal();
+  };
+
+  // Sync individual row to Apps Script
+  const handleSyncEntry = async (entry) => {
+    const id = entry.ID;
+    setSyncingIds(prev => ({ ...prev, [id]: true }));
+
+    try {
+      const payload = {
+        "Hari, tanggal": entry["Hari, tanggal"],
+        "Jam ke-": entry["Jam ke-"],
+        "Kelas": entry["Kelas"],
+        "Materi Pokok": entry["Materi Pokok"],
+        "Kegiatan Pembelajaran": entry["Kegiatan Pembelajaran"]
+      };
+
+      let res;
+      if (entry._rowNum) {
+        res = await fetch("/api/jurnal", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: entry.ID, data: payload }),
+        });
+      } else {
+        res = await fetch("/api/jurnal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ID: entry.ID, ...payload }),
+        });
+      }
+
+      if (!res.ok) throw new Error("Gagal menyinkronkan data jurnal");
+      
+      // Update local storage and state to synced: true
+      const updated = entries.map(e => e.ID === id ? { ...e, synced: true } : e);
+      setEntries(updated);
+      setParsedEntries(updated);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("jurnal_entries", JSON.stringify(updated));
+      }
+
+      showToast("Jurnal berhasil disinkronkan ke Google Sheet!");
+      await fetchJurnal(false);
+    } catch (e) {
+      console.error(e);
+      showToast("Gagal sinkronisasi data ke Google Sheets.", "error");
+    } finally {
+      setSyncingIds(prev => ({ ...prev, [id]: false }));
+    }
   };
 
   // Filter entries based on search
@@ -278,7 +395,6 @@ export default function Home() {
       (entry["Hari, tanggal"] || "").toLowerCase().includes(query) ||
       (entry["Materi Pokok"] || "").toLowerCase().includes(query) ||
       (entry["Kegiatan Pembelajaran"] || "").toLowerCase().includes(query) ||
-      (entry["Kehadiran"] || "").toLowerCase().includes(query) ||
       (entry["Kelas"] || "").toLowerCase().includes(query)
     );
   });
@@ -302,45 +418,6 @@ export default function Home() {
 
       {/* Main Canvas */}
       <main className="flex-grow px-container-margin py-md max-w-7xl mx-auto w-full">
-        
-        {/* Dashboard Analytics / Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter mb-lg">
-          <div className="bg-surface border border-outline-variant rounded-lg p-md shadow-sm flex items-center justify-between">
-            <div>
-              <p className="font-label-caps text-label-caps text-on-surface-variant">Total Entri</p>
-              <p className="font-display text-display text-primary mt-xs">{parsedEntries.length}</p>
-            </div>
-            <div className="h-12 w-12 bg-secondary-container text-on-secondary-container rounded-full flex items-center justify-center">
-              <span className="material-symbols-outlined">history_edu</span>
-            </div>
-          </div>
-          
-          <div className="bg-surface border border-outline-variant rounded-lg p-md shadow-sm flex items-center justify-between">
-            <div>
-              <p className="font-label-caps text-label-caps text-on-surface-variant">Update Terakhir</p>
-              <p className="font-h3 text-h3 text-on-surface mt-sm">
-                {parsedEntries.length > 0 ? parsedEntries[parsedEntries.length - 1]["Hari, tanggal"] : "-"}
-              </p>
-            </div>
-            <div className="h-12 w-12 bg-secondary-container text-on-secondary-container rounded-full flex items-center justify-center">
-              <span className="material-symbols-outlined">calendar_today</span>
-            </div>
-          </div>
-
-          <div className="bg-surface border border-outline-variant rounded-lg p-md shadow-sm flex items-center justify-between">
-            <div>
-              <p className="font-label-caps text-label-caps text-on-surface-variant">Status Database</p>
-              <p className="font-h3 text-h3 text-emerald-600 mt-sm flex items-center gap-xs">
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                Mode Demo (Lokal)
-              </p>
-            </div>
-            <div className="h-12 w-12 bg-secondary-container text-on-secondary-container rounded-full flex items-center justify-center">
-              <span className="material-symbols-outlined">cloud_off</span>
-            </div>
-          </div>
-        </div>
-
         {/* Search and Filter Bar */}
         <div className="flex flex-col sm:flex-row gap-gutter mb-lg">
           <div className="relative flex-grow">
@@ -379,21 +456,24 @@ export default function Home() {
             <p className="font-body-lg text-body-lg">Memuat data...</p>
           </div>
         ) : filteredEntries.length === 0 ? (
-          <div className="bg-surface border border-outline-variant rounded-lg p-xl text-center flex flex-col items-center gap-md">
-            <span className="material-symbols-outlined text-[64px] text-on-surface-variant">history_edu</span>
-            <div>
-              <h3 className="font-h2 text-h2 text-on-surface">Belum Ada Catatan Jurnal</h3>
-              <p className="font-body-md text-body-md text-on-surface-variant mt-sm max-w-sm">
-                {searchQuery
-                  ? "Tidak ditemukan jurnal yang cocok dengan kata kunci pencarian Anda."
-                  : "Mulai mengisi jurnal mengajar harian Anda dengan menekan tombol '+' di kanan bawah."}
-              </p>
+          <div className="bg-surface border border-outline-variant rounded-2xl p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <span className="material-symbols-outlined text-primary text-[32px] mt-1">history_edu</span>
+              <div>
+                <h3 className="font-h3 text-h3 font-semibold text-on-surface">Belum Ada Catatan Jurnal</h3>
+                <p className="font-body-md text-body-md text-on-surface-variant mt-1">
+                  {searchQuery
+                    ? "Tidak ditemukan jurnal yang cocok dengan kata kunci pencarian Anda."
+                    : "Mulai mengisi jurnal mengajar harian Anda dengan menekan tombol '+' di kanan bawah."}
+                </p>
+              </div>
             </div>
             {!searchQuery && (
               <button
                 onClick={openCreateModal}
-                className="bg-primary text-on-primary font-label-caps text-label-caps px-4 py-2 rounded shadow-sm hover:bg-primary/90 transition-colors"
+                className="bg-primary text-on-primary font-label-caps text-label-caps px-4 py-2.5 rounded-lg shadow-sm hover:bg-primary/95 transition-all flex items-center gap-xs cursor-pointer whitespace-nowrap self-start sm:self-auto"
               >
+                <span className="material-symbols-outlined text-[20px]">add</span>
                 Buat Entri Pertama
               </button>
             )}
@@ -404,7 +484,7 @@ export default function Home() {
             <div className="md:hidden flex flex-col gap-gutter">
               {filteredEntries.map((entry, idx) => (
                 <div
-                  key={entry._rowNum || idx}
+                  key={entry.ID || entry._rowNum || idx}
                   onClick={() => openEditModal(entry)}
                   className="bg-surface border border-outline-variant rounded-lg p-md shadow-sm hover:border-primary transition-colors cursor-pointer relative overflow-hidden group"
                 >
@@ -424,20 +504,45 @@ export default function Home() {
                     </p>
                   </div>
                   <div className="flex items-center justify-between border-t border-outline-variant pt-sm mt-sm">
-                    <div className="font-caption text-caption text-secondary">
-                      Kelas {entry["Kelas"]}
+                    <div className="font-caption text-caption text-secondary flex items-center gap-2">
+                      <span>Kelas {entry["Kelas"]}</span>
+                      {entry.synced ? (
+                        <span className="text-emerald-600 flex items-center gap-0.5 text-[10px]">
+                          <span className="material-symbols-outlined text-[14px]">cloud_done</span>
+                          Ok
+                        </span>
+                      ) : syncingIds[entry.ID] ? (
+                        <span className="text-amber-500 flex items-center gap-0.5 text-[10px]">
+                          <span className="material-symbols-outlined text-[14px] animate-spin">sync</span>
+                          Syncing...
+                        </span>
+                      ) : (
+                        <span className="text-amber-600 flex items-center gap-0.5 text-[10px] animate-pulse">
+                          <span className="material-symbols-outlined text-[14px]">cloud_queue</span>
+                          Belum Sync
+                        </span>
+                      )}
                     </div>
-                    <div className="flex items-center gap-sm">
-                      {renderKehadiranBadges(entry["Kehadiran"])}
-                      <div className="flex gap-xs border-l border-outline-variant pl-sm ml-xs" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex gap-sm items-center" onClick={(e) => e.stopPropagation()}>
+                      {!entry.synced && (
                         <button
-                          onClick={() => openDeleteModal(entry)}
-                          className="text-error hover:bg-error-container/20 p-1 rounded-full transition-colors flex items-center justify-center"
-                          title="Hapus Jurnal"
+                          onClick={() => handleSyncEntry(entry)}
+                          disabled={syncingIds[entry.ID]}
+                          className="text-amber-500 hover:bg-amber-50 p-1 rounded-full transition-colors flex items-center justify-center disabled:opacity-50"
+                          title="Sinkronisasi ke Sheet"
                         >
-                          <span className="material-symbols-outlined text-[18px]">delete</span>
+                          <span className={`material-symbols-outlined text-[18px] ${syncingIds[entry.ID] ? "animate-spin" : ""}`}>
+                            {syncingIds[entry.ID] ? "sync" : "cloud_upload"}
+                          </span>
                         </button>
-                      </div>
+                      )}
+                      <button
+                        onClick={() => openDeleteModal(entry)}
+                        className="text-error hover:bg-error-container/20 p-1 rounded-full transition-colors flex items-center justify-center"
+                        title="Hapus Jurnal"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">delete</span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -468,7 +573,7 @@ export default function Home() {
                       Kegiatan Pembelajaran
                     </th>
                     <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-32 text-center">
-                      Kehadiran
+                      Status
                     </th>
                     <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-24 text-center">
                       Aksi
@@ -478,7 +583,7 @@ export default function Home() {
                 <tbody className="font-body-md text-body-md text-on-surface">
                   {filteredEntries.map((entry, idx) => (
                     <tr
-                      key={entry._rowNum || idx}
+                      key={entry.ID || entry._rowNum || idx}
                       onClick={() => openEditModal(entry)}
                       className={`border-b border-outline-variant hover:bg-surface-container-highest transition-colors cursor-pointer ${
                         idx % 2 === 1 ? "bg-surface-bright" : ""
@@ -496,21 +601,39 @@ export default function Home() {
                       <td className="py-3 px-4 text-on-surface-variant truncate max-w-[200px]" title={entry["Kegiatan Pembelajaran"]}>
                         {entry["Kegiatan Pembelajaran"] || "-"}
                       </td>
-                      <td className="py-3 px-4">
-                        {renderKehadiranBadges(entry["Kehadiran"])}
+                      <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
+                        {entry.synced ? (
+                          <span className="text-emerald-600 inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full text-xs font-semibold">
+                            <span className="material-symbols-outlined text-[16px]">cloud_done</span>
+                            Ok
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleSyncEntry(entry)}
+                            disabled={syncingIds[entry.ID]}
+                            className="bg-amber-500 hover:bg-amber-600 text-white inline-flex items-center gap-1.5 px-3 py-1 rounded-full transition-all active:scale-95 text-xs font-semibold shadow-sm cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
+                          >
+                            {syncingIds[entry.ID] ? (
+                              <span className="material-symbols-outlined text-[16px] animate-spin">sync</span>
+                            ) : (
+                              <span className="material-symbols-outlined text-[16px]">cloud_upload</span>
+                            )}
+                            {syncingIds[entry.ID] ? "Syncing..." : "Sync"}
+                          </button>
+                        )}
                       </td>
                       <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-center gap-xs">
                           <button
                             onClick={() => openEditModal(entry)}
-                            className="text-primary hover:bg-surface-container-high p-1 rounded-full active:opacity-80 transition-all"
+                            className="text-primary hover:bg-surface-container-high p-1 rounded-full active:opacity-80 transition-all cursor-pointer"
                             title="Edit Jurnal"
                           >
                             <span className="material-symbols-outlined text-[20px]">edit</span>
                           </button>
                           <button
                             onClick={() => openDeleteModal(entry)}
-                            className="text-error hover:bg-error-container/20 p-1 rounded-full active:opacity-80 transition-all"
+                            className="text-error hover:bg-error-container/20 p-1 rounded-full active:opacity-80 transition-all cursor-pointer"
                             title="Hapus Jurnal"
                           >
                             <span className="material-symbols-outlined text-[20px]">delete</span>
@@ -592,15 +715,19 @@ export default function Home() {
                     <label className="font-label-caps text-label-caps text-on-surface-variant">
                       Jam ke-
                     </label>
-                    <input
-                      type="text"
-                      placeholder="Contoh: 1-2, atau 3-4"
-                      value={formData["Jam ke-"]}
+                    <select
+                      value={formData["Jam ke-"] || "1"}
                       onChange={(e) =>
                         setFormData((prev) => ({ ...prev, "Jam ke-": e.target.value }))
                       }
                       className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
-                    />
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                        <option key={num} value={num.toString()}>
+                          Jam ke-{num}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Kelas Selection */}
@@ -616,34 +743,15 @@ export default function Home() {
                       }
                       className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
                     >
-                      <option value="7A">Kelas 7A</option>
-                      <option value="7B">Kelas 7B</option>
-                      <option value="7C">Kelas 7C</option>
-                      <option value="7D">Kelas 7D</option>
-                      <option value="8A">Kelas 8A</option>
-                      <option value="8C">Kelas 8C</option>
-                      <option value="9A">Kelas 9A</option>
+                      {classesList.map((cls) => (
+                        <option key={cls} value={cls}>
+                          Kelas {cls}
+                        </option>
+                      ))}
                     </select>
                   </div>
 
-                  {/* Kehadiran */}
-                  <div className="flex flex-col gap-xs md:col-span-2">
-                    <label className="font-label-caps text-label-caps text-on-surface-variant">
-                      Kehadiran
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Contoh: H:30, A:2 (atau 30 Hadir, 2 Alpa)"
-                      value={formData["Kehadiran"]}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, "Kehadiran": e.target.value }))
-                      }
-                      className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
-                    />
-                    <p className="font-caption text-caption text-on-surface-variant mt-1">
-                      Format disarankan: `H:30, A:2` (untuk memicu indikator kehadiran berwarna).
-                    </p>
-                  </div>
+
 
                   {/* Materi Pokok */}
                   <div className="flex flex-col gap-xs md:col-span-2">

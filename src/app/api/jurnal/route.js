@@ -18,7 +18,7 @@ export async function GET() {
   if (errorResponse) return errorResponse;
 
   try {
-    const response = await fetch(`${WEBAPP_URL}?action=read`, {
+    const response = await fetch(`${WEBAPP_URL}?action=read&sheet=Jurnal%20Besar`, {
       method: "GET",
       headers: {
         "Accept": "application/json",
@@ -53,6 +53,7 @@ export async function POST(request) {
       },
       body: JSON.stringify({
         action: "create",
+        sheet: "Jurnal Besar",
         data: body,
       }),
     });
@@ -87,6 +88,7 @@ export async function PUT(request) {
       },
       body: JSON.stringify({
         action: "update",
+        sheet: "Jurnal Besar",
         id: id,
         data: updatePayload,
       }),
@@ -123,6 +125,7 @@ export async function DELETE(request) {
       },
       body: JSON.stringify({
         action: "delete",
+        sheet: "Jurnal Besar",
         id: id,
       }),
     });

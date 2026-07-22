@@ -2,11 +2,63 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 
-export default function KelasPage() {
-  const [classes, setClasses] = useState([]);
+function KelasContent() {
+  const [classes, setClasses] = useState(() => {
+    if (typeof window !== "undefined") {
+      const storedClasses = localStorage.getItem("daftar_kelas");
+      const storedStudents = localStorage.getItem("daftar_siswa");
+      
+      let classesList = [];
+      let studentsList = [];
+      
+      if (storedStudents) {
+        try {
+          studentsList = JSON.parse(storedStudents).filter(s => !s.isDeleted);
+        } catch (e) {}
+      }
+      
+      let parsedClasses = [];
+      if (storedClasses) {
+        try {
+          const parsed = JSON.parse(storedClasses);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            parsedClasses = parsed;
+          }
+        } catch (e) {}
+      }
+      
+      if (parsedClasses.length === 0 && studentsList.length > 0) {
+        parsedClasses = [...new Set(studentsList.map(s => s.class).filter(Boolean))].sort();
+        localStorage.setItem("daftar_kelas", JSON.stringify(parsedClasses));
+      }
+      
+      if (Array.isArray(parsedClasses) && parsedClasses.length > 0) {
+        return parsedClasses.map((code, index) => {
+          const count = studentsList.filter(s => s.class === code).length;
+          return {
+            id: index + 1,
+            code: code,
+            name: `Kelas ${code}`,
+            type: code.startsWith("X") || code.startsWith("XI") || code.startsWith("XII") ? "SMA" : "SMP",
+            studentCount: count
+          };
+        });
+      }
+    }
+    return [];
+  });
   const [searchQuery, setSearchQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => {
+    if (typeof window !== "undefined") {
+      const storedStudents = localStorage.getItem("daftar_siswa");
+      if (storedStudents) {
+        return false;
+      }
+    }
+    return true;
+  });
 
   // Modal states for CRUD classes
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -27,45 +79,10 @@ export default function KelasPage() {
 
   // Load classes dynamically from local storage or API on mount
   useEffect(() => {
-    const cachedClasses = localStorage.getItem("daftar_kelas");
     const cachedStudents = localStorage.getItem("daftar_siswa");
-    if (cachedClasses || cachedStudents) {
-      let classesList = [];
-      let studentsList = [];
-      if (cachedStudents) {
-        try {
-          studentsList = JSON.parse(cachedStudents).filter(s => !s.isDeleted);
-        } catch (e) {}
-      }
-      let parsedClasses = [];
-      if (cachedClasses) {
-        try {
-          const parsed = JSON.parse(cachedClasses);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            parsedClasses = parsed;
-          }
-        } catch (e) {}
-      }
-      if (parsedClasses.length === 0 && studentsList.length > 0) {
-        parsedClasses = [...new Set(studentsList.map(s => s.class).filter(Boolean))].sort();
-      }
-      if (Array.isArray(parsedClasses) && parsedClasses.length > 0) {
-        classesList = parsedClasses.map((code, index) => {
-          const count = studentsList.filter(s => s.class === code).length;
-          return {
-            id: index + 1,
-            code: code,
-            name: `Kelas ${code}`,
-            type: code.startsWith("X") || code.startsWith("XI") || code.startsWith("XII") ? "SMA" : "SMP",
-            studentCount: count
-          };
-        });
-      }
-      setClasses(classesList);
-      setIsLoading(false);
-    }
 
     const loadData = async () => {
+      setIsLoading(true);
       let storedClasses = localStorage.getItem("daftar_kelas");
       let storedStudents = localStorage.getItem("daftar_siswa");
       
@@ -142,7 +159,9 @@ export default function KelasPage() {
       setClasses(classesList);
       setIsLoading(false);
     };
-    loadData();
+    if (!cachedStudents) {
+      loadData();
+    }
   }, []);
 
   // Compute filtered classes dynamically on render
@@ -429,4 +448,12 @@ export default function KelasPage() {
       )}
     </>
   );
+}
+
+const DynamicKelasContent = dynamic(() => Promise.resolve(KelasContent), {
+  ssr: false
+});
+
+export default function KelasPage() {
+  return <DynamicKelasContent />;
 }
