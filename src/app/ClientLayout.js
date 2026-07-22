@@ -47,6 +47,7 @@ export default function ClientLayout({ children }) {
   const [toast, setToast] = useState(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [syncKey, setSyncKey] = useState(0);
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
   const [teacherName, setTeacherName] = useState("Guru Terbaik");
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profileNameInput, setProfileNameInput] = useState("");
@@ -301,7 +302,10 @@ export default function ClientLayout({ children }) {
   }
 
   const handleManualSync = async () => {
+    if (isManualSyncing) return;
+    setIsManualSyncing(true);
     showToast("Sinkronisasi data dari Google Sheet...", "info");
+    localStorage.clear()
     try {
       const [resSiswa, resPresensi, resMateri, resJurnal] = await Promise.all([
         fetch("/api/siswa").catch(() => null),
@@ -394,6 +398,8 @@ export default function ClientLayout({ children }) {
     } catch (e) {
       console.error(e);
       showToast("Sinkronisasi gagal!", "error");
+    } finally {
+      setIsManualSyncing(false);
     }
   };
 
@@ -448,10 +454,11 @@ export default function ClientLayout({ children }) {
         <div className="flex items-center gap-1">
           <button
             onClick={handleManualSync}
-            className="text-primary hover:bg-surface-container-high transition-colors p-2 rounded-full flex items-center justify-center"
+            disabled={isManualSyncing}
+            className="text-primary hover:bg-surface-container-high transition-colors p-2 rounded-full flex items-center justify-center disabled:opacity-50"
             title="Sinkronisasi Manual"
           >
-            <span className="material-symbols-outlined">sync</span>
+            <span className={`material-symbols-outlined ${isManualSyncing ? "animate-spin" : ""}`}>sync</span>
           </button>
           <button
             onClick={handleLogout}
