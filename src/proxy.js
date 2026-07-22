@@ -1,6 +1,29 @@
 import { NextResponse } from "next/server";
 import { refreshSupabaseSession } from "@/app/lib/auth";
 
+function isJwtExpired(token) {
+  if (!token) return true;
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return true;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map(c => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    const payload = JSON.parse(jsonPayload);
+    if (payload.exp && payload.exp * 1000 < Date.now()) {
+      return true;
+    }
+    return false;
+  } catch (e) {
+    return true;
+  }
+}
+
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
 
@@ -11,8 +34,10 @@ export async function proxy(request) {
   let token = request.cookies.get("sb-access-token")?.value;
   const refreshToken = request.cookies.get("sb-refresh-token")?.value;
 
+  const tokenExpired = isJwtExpired(token);
+
   // Jika access token habis tetapi refresh token ada, coba perbarui session
-  if (!token && refreshToken) {
+  if (tokenExpired && refreshToken) {
     const data = await refreshSupabaseSession(refreshToken);
     if (data) {
       token = data.access_token;
@@ -37,15 +62,20 @@ export async function proxy(request) {
     }
   }
 
-  // Jika tidak ada token dan bukan halaman login, redirect ke halaman login
-  if (!token && !isLoginPage) {
+  // Jika tidak ada token (atau token expired) dan bukan halaman login, redirect ke halaman login
+  if (tokenExpired && !isLoginPage) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname);
-    return NextResponse.redirect(loginUrl);
+    const response = NextResponse.redirect(loginUrl);
+    
+    // Hapus cookie yang tidak valid
+    response.cookies.delete("sb-access-token");
+    response.cookies.delete("sb-refresh-token");
+    return response;
   }
 
-  // Jika sudah login tapi mencoba mengakses halaman login, redirect ke dashboard
-  if (token && isLoginPage) {
+  // Jika sudah login (token valid) tapi mencoba mengakses halaman login, redirect ke dashboard
+  if (!tokenExpired && isLoginPage) {
     const dashboardUrl = new URL("/", request.url);
     return NextResponse.redirect(dashboardUrl);
   }

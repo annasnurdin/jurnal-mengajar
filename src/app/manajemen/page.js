@@ -1,13 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 
 export default function Manajemen() {
-  // Toast Notification State
+  const [counts, setCounts] = useState({ siswa: 0, kelas: 0, materi: 0 });
   const [toast, setToast] = useState(null);
 
-  // Show toast utility
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storedSiswa = localStorage.getItem("daftar_siswa");
+      const storedKelas = localStorage.getItem("daftar_kelas");
+      const storedMateri = localStorage.getItem("daftar_materi_pokok");
+
+      let countSiswa = 0;
+      let countKelas = 0;
+      let countMateri = 0;
+
+      if (storedSiswa) {
+        try {
+          countSiswa = JSON.parse(storedSiswa).filter((s) => !s.isDeleted).length;
+        } catch (e) {}
+      }
+      if (storedKelas) {
+        try {
+          countKelas = JSON.parse(storedKelas).length;
+        } catch (e) {}
+      }
+      if (storedMateri) {
+        try {
+          countMateri = JSON.parse(storedMateri).length;
+        } catch (e) {}
+      }
+
+      const timer = setTimeout(() => {
+        setCounts({ siswa: countSiswa, kelas: countKelas, materi: countMateri });
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   const showToast = (message, type = "success") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
@@ -33,9 +65,9 @@ export default function Manajemen() {
       {/* Main Content Canvas */}
       <main className="max-w-7xl mx-auto px-container-margin py-md w-full">
         <header className="mb-8 text-center md:text-left">
-          <h2 className="font-display text-display text-on-surface mb-2">Manajemen Data</h2>
+          <h2 className="font-display text-display text-primary">Manajemen Data</h2>
           <p className="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">
-            Kelola data referensi utama untuk jurnal mengajar Anda. Pastikan data siswa, kelas, dan materi selalu up-to-date.
+            Dashboard pengelolaan data
           </p>
         </header>
 
@@ -58,7 +90,7 @@ export default function Manajemen() {
             <div className="flex items-end justify-between border-t border-outline-variant pt-md mt-auto">
               <div>
                 <span className="block font-label-caps text-label-caps text-outline mb-xs">TOTAL SISWA</span>
-                <span className="font-h1 text-h1 text-primary">3</span>
+                <span className="font-h1 text-h1 text-primary">{counts.siswa}</span>
               </div>
               <div className="bg-surface-container-high text-on-surface hover:bg-surface-variant font-label-caps text-label-caps px-md py-sm rounded-lg transition-colors flex items-center space-x-2">
                 <span className="material-symbols-outlined text-[18px]">edit</span>
@@ -84,7 +116,7 @@ export default function Manajemen() {
             <div className="flex items-end justify-between border-t border-outline-variant pt-md mt-auto">
               <div>
                 <span className="block font-label-caps text-label-caps text-outline mb-xs">TOTAL KELAS</span>
-                <span className="font-h1 text-h1 text-primary">3</span>
+                <span className="font-h1 text-h1 text-primary">{counts.kelas}</span>
               </div>
               <div className="bg-surface-container-high text-on-surface hover:bg-surface-variant font-label-caps text-label-caps px-md py-sm rounded-lg transition-colors flex items-center space-x-2">
                 <span className="material-symbols-outlined text-[18px]">edit</span>
@@ -94,8 +126,8 @@ export default function Manajemen() {
           </Link>
 
           {/* Materi Pokok Card */}
-          <div
-            onClick={() => showToast("Manajemen Materi Pokok akan segera hadir!", "info")}
+          <Link
+            href="/materi-pokok"
             className="bg-surface rounded-xl border border-outline-variant p-lg flex flex-col justify-between hover:border-primary hover:bg-surface-container-lowest transition-colors group cursor-pointer h-full animate-fade-in"
           >
             <div>
@@ -110,14 +142,14 @@ export default function Manajemen() {
             <div className="flex items-end justify-between border-t border-outline-variant pt-md mt-auto">
               <div>
                 <span className="block font-label-caps text-label-caps text-outline mb-xs">TOTAL MATERI</span>
-                <span className="font-h1 text-h1 text-primary">24</span>
+                <span className="font-h1 text-h1 text-primary">{counts.materi}</span>
               </div>
-              <button className="bg-surface-container-high text-on-surface hover:bg-surface-variant font-label-caps text-label-caps px-md py-sm rounded-lg transition-colors flex items-center space-x-2">
+              <div className="bg-surface-container-high text-on-surface hover:bg-surface-variant font-label-caps text-label-caps px-md py-sm rounded-lg transition-colors flex items-center space-x-2">
                 <span className="material-symbols-outlined text-[18px]">edit</span>
                 <span>Kelola</span>
-              </button>
+              </div>
             </div>
-          </div>
+          </Link>
         </div>
       </main>
     </>

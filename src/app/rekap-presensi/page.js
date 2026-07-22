@@ -461,13 +461,13 @@ function RekapContent() {
       )}
 
       {/* Main Canvas Container */}
-      <main className="flex-grow px-container-margin py-md max-w-4xl mx-auto w-full flex flex-col pb-32">
+      <main className="flex-grow px-container-margin py-md max-w-7xl mx-auto w-full">
         {/* Header Title */}
-        <div className="mb-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="mb-lg text-center flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h2 className="font-display text-display text-primary">Rekap Presensi</h2>
             <p className="font-body-md text-body-md text-on-surface-variant mt-1">
-              Riwayat presensi harian yang disinkronkan ke Google Sheet (1 baris per hari).
+              Presensi harian seluruh kelas
             </p>
           </div>
         </div>
@@ -544,7 +544,7 @@ function RekapContent() {
                       {record.synced ? (
                         <span className="text-emerald-600 font-label-caps text-label-caps flex items-center gap-1 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full text-xs">
                           <span className="material-symbols-outlined text-[18px]">cloud_done</span>
-                          Tersinkronisasi
+                          OK
                         </span>
                       ) : (
                         <button
@@ -625,7 +625,7 @@ function RekapContent() {
       {/* Floating Action Button (FAB) */}
       <button
         onClick={() => setShowClassModal(true)}
-        className="fixed bottom-24 md:bottom-8 right-container-margin md:right-8 w-14 h-14 bg-primary text-on-primary rounded-full shadow-lg flex items-center justify-center hover:bg-primary-container hover:shadow-xl transition-all duration-200 z-40 active:scale-95 animate-fade-in"
+        className="fixed bottom-[92px] md:bottom-8 right-container-margin md:right-8 w-14 h-14 bg-primary text-on-primary rounded-full shadow-lg flex items-center justify-center hover:bg-primary-container hover:shadow-xl transition-all duration-200 z-40 active:scale-95 animate-fade-in"
         title="Mulai Presensi Baru"
       >
         <span className="material-symbols-outlined text-[28px]">add</span>

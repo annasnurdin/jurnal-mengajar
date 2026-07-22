@@ -46,6 +46,61 @@ export default function ClientLayout({ children }) {
   const pathname = usePathname();
   const [toast, setToast] = useState(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [syncKey, setSyncKey] = useState(0);
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+  const [teacherName, setTeacherName] = useState("Guru Terbaik");
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileNameInput, setProfileNameInput] = useState("");
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/profile")
+      .then(res => res.json())
+      .then(data => {
+        if (data.displayName) {
+          setTeacherName(data.displayName);
+        }
+      })
+      .catch(err => console.error("Gagal memuat profil:", err));
+  }, []);
+
+  const openProfileModal = () => {
+    setProfileNameInput(teacherName);
+    setIsProfileModalOpen(true);
+  };
+
+  const handleProfileSubmit = async (e) => {
+    e.preventDefault();
+    if (!profileNameInput.trim()) {
+      showToast("Nama tidak boleh kosong", "error");
+      return;
+    }
+
+    setIsSavingProfile(true);
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ displayName: profileNameInput.trim() })
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Gagal memperbarui profil");
+      }
+
+      const result = await res.json();
+      setTeacherName(result.displayName);
+      showToast("Profil berhasil diperbarui!", "success");
+      setIsProfileModalOpen(false);
+    } catch (err) {
+      console.error(err);
+      showToast(err.message, "error");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
 
   const showToast = (message, type = "info") => {
     setToast({ message, type });
@@ -63,9 +118,13 @@ export default function ClientLayout({ children }) {
       try {
         const storedSiswa = localStorage.getItem("daftar_siswa");
         const storedPresensi = localStorage.getItem("riwayat_presensi");
+        const storedMateri = localStorage.getItem("daftar_materi_pokok");
+        const storedJurnal = localStorage.getItem("jurnal_entries");
 
         let isSiswaEmpty = true;
         let isPresensiEmpty = true;
+        let isMateriEmpty = true;
+        let isJurnalEmpty = true;
 
         if (storedSiswa) {
           try {
@@ -85,11 +144,31 @@ export default function ClientLayout({ children }) {
           } catch (e) {}
         }
 
-        if (isSiswaEmpty || isPresensiEmpty) {
+        if (storedMateri) {
+          try {
+            const parsed = JSON.parse(storedMateri);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              isMateriEmpty = false;
+            }
+          } catch (e) {}
+        }
+
+        if (storedJurnal) {
+          try {
+            const parsed = JSON.parse(storedJurnal);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              isJurnalEmpty = false;
+            }
+          } catch (e) {}
+        }
+
+        if (isSiswaEmpty || isPresensiEmpty || isMateriEmpty || isJurnalEmpty) {
           console.log("Seed data is empty or incomplete. Fetching from APIs...");
-          const [resSiswa, resPresensi] = await Promise.all([
+          const [resSiswa, resPresensi, resMateri, resJurnal] = await Promise.all([
             fetch("/api/siswa").catch(() => null),
-            fetch("/api/presensi").catch(() => null)
+            fetch("/api/presensi").catch(() => null),
+            fetch("/api/materi-pokok").catch(() => null),
+            fetch("/api/jurnal").catch(() => null)
           ]);
 
           let mappedSiswa = [];
@@ -126,9 +205,50 @@ export default function ClientLayout({ children }) {
             }
           }
 
+          let mappedMateri = [];
+          if (resMateri && resMateri.ok) {
+            const dataMateri = await resMateri.json().catch(() => ({}));
+            if (dataMateri && Array.isArray(dataMateri.data)) {
+              mappedMateri = dataMateri.data.map((item) => ({
+                id: item.ID || item._rowNum,
+                name: item["Materi Pokok"] || "",
+                synced: true,
+                _rowNum: item._rowNum
+              }));
+            }
+          }
+
+          let mappedJurnal = [];
+          if (resJurnal && resJurnal.ok) {
+            const dataJurnal = await resJurnal.json().catch(() => ({}));
+            if (dataJurnal && Array.isArray(dataJurnal.data)) {
+              const formatHariTanggal = (dateStr) => {
+                if (!dateStr) return "";
+                const date = new Date(dateStr);
+                const days = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+                const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "Okt", "Nov", "Des"];
+                const dayName = days[date.getDay()];
+                const dayNum = date.getDate();
+                const monthName = months[date.getMonth()];
+                const year = date.getFullYear();
+                return `${dayName}, ${dayNum < 10 ? '0' + dayNum : dayNum} ${monthName} ${year}`;
+              };
+              mappedJurnal = dataJurnal.data.map(item => {
+                const rawDate = item["Hari, tanggal"];
+                const formattedDate = rawDate && !rawDate.includes(",") ? formatHariTanggal(rawDate) : rawDate;
+                return { ...item, "Hari, tanggal": formattedDate, synced: true };
+              });
+            }
+          }
 
           localStorage.setItem("daftar_siswa", JSON.stringify(mappedSiswa));
           localStorage.setItem("riwayat_presensi", JSON.stringify(mappedPresensi));
+          localStorage.setItem("daftar_materi_pokok", JSON.stringify(mappedMateri));
+          localStorage.setItem("jurnal_entries", JSON.stringify(mappedJurnal));
+
+          const active = mappedSiswa.filter((s) => s.class).map((s) => s.class);
+          const unique = [...new Set(active)].sort();
+          localStorage.setItem("daftar_kelas", JSON.stringify(unique));
         } else {
           console.log("Cached data found. Bypassing API fetches.");
         }
@@ -140,6 +260,15 @@ export default function ClientLayout({ children }) {
         }
         if (!localStorage.getItem("riwayat_presensi")) {
           localStorage.setItem("riwayat_presensi", JSON.stringify([]));
+        }
+        if (!localStorage.getItem("daftar_materi_pokok")) {
+          localStorage.setItem("daftar_materi_pokok", JSON.stringify([]));
+        }
+        if (!localStorage.getItem("jurnal_entries")) {
+          localStorage.setItem("jurnal_entries", JSON.stringify([]));
+        }
+        if (!localStorage.getItem("daftar_kelas")) {
+          localStorage.setItem("daftar_kelas", JSON.stringify([]));
         }
       } finally {
         setIsInitializing(false);
@@ -167,24 +296,23 @@ export default function ClientLayout({ children }) {
 
   if (isInitializing) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background text-on-background">
-        <div className="flex flex-col items-center justify-center p-xl gap-md text-on-surface-variant">
-          <span className="material-symbols-outlined text-[48px] animate-spin text-primary">sync</span>
-          <p className="font-body-lg text-body-lg font-medium">Menyiapkan data aplikasi...</p>
-          <p className="font-caption text-caption text-on-surface-variant max-w-xs text-center mt-1">
-            Mengambil data referensi dari Google Sheets untuk pertama kali...
-          </p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-background text-on-background">
+        <span className="material-symbols-outlined text-[48px] animate-spin text-primary">sync</span>
       </div>
     );
   }
 
   const handleManualSync = async () => {
+    if (isManualSyncing) return;
+    setIsManualSyncing(true);
     showToast("Sinkronisasi data dari Google Sheet...", "info");
+    localStorage.clear()
     try {
-      const [resSiswa, resPresensi] = await Promise.all([
+      const [resSiswa, resPresensi, resMateri, resJurnal] = await Promise.all([
         fetch("/api/siswa").catch(() => null),
-        fetch("/api/presensi").catch(() => null)
+        fetch("/api/presensi").catch(() => null),
+        fetch("/api/materi-pokok").catch(() => null),
+        fetch("/api/jurnal").catch(() => null)
       ]);
 
       let mappedSiswa = [];
@@ -221,18 +349,58 @@ export default function ClientLayout({ children }) {
         }
       }
 
+      let mappedMateri = [];
+      if (resMateri && resMateri.ok) {
+        const dataMateri = await resMateri.json().catch(() => ({}));
+        if (dataMateri && Array.isArray(dataMateri.data)) {
+          mappedMateri = dataMateri.data.map((item) => ({
+            id: item.ID || item._rowNum,
+            name: item["Materi Pokok"] || "",
+            synced: true,
+            _rowNum: item._rowNum
+          }));
+        }
+      }
+
+      let mappedJurnal = [];
+      if (resJurnal && resJurnal.ok) {
+        const dataJurnal = await resJurnal.json().catch(() => ({}));
+        if (dataJurnal && Array.isArray(dataJurnal.data)) {
+          const formatHariTanggal = (dateStr) => {
+            if (!dateStr) return "";
+            const date = new Date(dateStr);
+            const days = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+            const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "Okt", "Nov", "Des"];
+            const dayName = days[date.getDay()];
+            const dayNum = date.getDate();
+            const monthName = months[date.getMonth()];
+            const year = date.getFullYear();
+            return `${dayName}, ${dayNum < 10 ? '0' + dayNum : dayNum} ${monthName} ${year}`;
+          };
+          mappedJurnal = dataJurnal.data.map(item => {
+            const rawDate = item["Hari, tanggal"];
+            const formattedDate = rawDate && !rawDate.includes(",") ? formatHariTanggal(rawDate) : rawDate;
+            return { ...item, "Hari, tanggal": formattedDate, synced: true };
+          });
+        }
+      }
+
       localStorage.setItem("daftar_siswa", JSON.stringify(mappedSiswa));
       localStorage.setItem("riwayat_presensi", JSON.stringify(mappedPresensi));
+      localStorage.setItem("daftar_materi_pokok", JSON.stringify(mappedMateri));
+      localStorage.setItem("jurnal_entries", JSON.stringify(mappedJurnal));
       
       const active = mappedSiswa.filter((s) => s.class).map((s) => s.class);
       const unique = [...new Set(active)].sort();
       localStorage.setItem("daftar_kelas", JSON.stringify(unique));
 
-      showToast("Sinkronisasi selesai! Memuat ulang halaman...", "success");
-      setTimeout(() => window.location.reload(), 1000);
+      setSyncKey((prev) => prev + 1);
+      showToast("Sinkronisasi data selesai!", "success");
     } catch (e) {
       console.error(e);
       showToast("Sinkronisasi gagal!", "error");
+    } finally {
+      setIsManualSyncing(false);
     }
   };
 
@@ -273,7 +441,7 @@ export default function ClientLayout({ children }) {
             </Link>
           ) : (
             <button
-              onClick={() => showToast("Menu sidebar akan segera hadir!", "info")}
+              onClick={() => setIsMobileDrawerOpen(true)}
               className="md:hidden text-primary hover:bg-surface-container-high transition-colors p-2 rounded-full flex items-center justify-center"
             >
               <span className="material-symbols-outlined">menu</span>
@@ -287,19 +455,12 @@ export default function ClientLayout({ children }) {
         <div className="flex items-center gap-1">
           <button
             onClick={handleManualSync}
-            className="text-primary hover:bg-surface-container-high transition-colors p-2 rounded-full flex items-center justify-center"
+            disabled={isManualSyncing}
+            className="text-primary hover:bg-surface-container-high transition-colors p-2 rounded-full flex items-center justify-center disabled:opacity-50"
             title="Sinkronisasi Manual"
           >
-            <span className="material-symbols-outlined">sync</span>
+            <span className={`material-symbols-outlined ${isManualSyncing ? "animate-spin" : ""}`}>sync</span>
           </button>
-          {(!isTambahSiswa || true) && (
-            <button
-              onClick={() => showToast("Fitur Pencarian Aktif!", "info")}
-              className={`${isTambahSiswa ? "hidden md:flex" : "flex"} text-primary hover:bg-surface-container-high transition-colors p-2 rounded-full items-center justify-center`}
-            >
-              <span className="material-symbols-outlined">search</span>
-            </button>
-          )}
           <button
             onClick={handleLogout}
             className="text-error hover:bg-error-container/20 transition-colors p-2 rounded-full flex items-center justify-center"
@@ -313,16 +474,21 @@ export default function ClientLayout({ children }) {
       {/* NavigationDrawer (Web/Desktop Only) */}
       <aside className="hidden md:flex fixed inset-y-0 left-0 z-[60] flex-col py-lg h-full w-72 rounded-r-xl bg-surface shadow-lg border-r border-outline-variant">
         {/* Profile Header */}
-        <div className="px-container-margin mb-8 flex items-center gap-4">
+        <div
+          onClick={openProfileModal}
+          className="px-container-margin mb-8 flex items-center gap-4 cursor-pointer hover:bg-surface-container-high transition-colors rounded-xl p-2"
+          title="Atur Profil"
+        >
           <img
             alt="Foto Profil Guru"
-            className="w-12 h-12 rounded-full object-cover border border-outline-variant"
+            className="w-12 h-12 rounded-full object-cover border border-outline-variant flex-shrink-0"
             src="https://lh3.googleusercontent.com/aida-public/AB6AXuAvojQwEtGFaVdGzsoleYLUMtjK6m88IoL7ytbZq_yTAq6kJa_hs08rjN3cTJM5b-edFscwNn6DQLKqcfUJsGv66f0fghI75Zdw58jtjyCpMvKE6-kSOWhQRjC_MKThVHVYzBRbpgcg5GXScP8271mdyauSXWEHaiPkFBp6Jaz0bKjZdS2qZoRmzpifJknU23Qgk0RRLEdUGICMQ6yyLaPLDtmKvnhBhGwp6bfnaxZU_q5D2UaHjZqy2_VAcVJrC_iaTzVLYDaoZw"
           />
-          <div>
-            <h2 className="font-h2 text-h2 font-bold text-primary">Budi Santoso, S.Pd.</h2>
-            <p className="font-caption text-caption text-on-surface-variant mt-1">NIP: 198501012010011002</p>
-            <p className="font-caption text-caption text-primary">Guru Madya</p>
+          <div className="min-w-0 flex-grow">
+            <h2 className="font-h2 text-h2 font-bold text-primary truncate" title={teacherName}>
+              {teacherName}
+            </h2>
+            <p className="font-caption text-caption text-on-surface-variant hover:underline mt-0.5">Atur Profil</p>
           </div>
         </div>
         {/* Nav Items */}
@@ -382,9 +548,57 @@ export default function ClientLayout({ children }) {
           </button>
         </nav>
       </aside>
+      
+      {/* Mobile Navigation Drawer */}
+      {isMobileDrawerOpen && (
+        <>
+          {/* Backdrop Overlay */}
+          <div
+            onClick={() => setIsMobileDrawerOpen(false)}
+            className="fixed inset-0 bg-black/50 z-[90] md:hidden animate-fade-in"
+          />
+          {/* Drawer content panel */}
+          <aside className="fixed inset-y-0 left-0 z-[100] flex flex-col py-lg h-full w-72 rounded-r-xl bg-surface shadow-2xl border-r border-outline-variant md:hidden animate-slide-in-left">
+            {/* Profile Header */}
+            <div
+              onClick={() => {
+                setIsMobileDrawerOpen(false);
+                openProfileModal();
+              }}
+              className="px-container-margin mb-8 flex items-center gap-4 cursor-pointer hover:bg-surface-container-high transition-colors rounded-xl p-2"
+              title="Atur Profil"
+            >
+              <img
+                alt="Foto Profil Guru"
+                className="w-12 h-12 rounded-full object-cover border border-outline-variant flex-shrink-0"
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuAvojQwEtGFaVdGzsoleYLUMtjK6m88IoL7ytbZq_yTAq6kJa_hs08rjN3cTJM5b-edFscwNn6DQLKqcfUJsGv66f0fghI75Zdw58jtjyCpMvKE6-kSOWhQRjC_MKThVHVYzBRbpgcg5GXScP8271mdyauSXWEHaiPkFBp6Jaz0bKjZdS2qZoRmzpifJknU23Qgk0RRLEdUGICMQ6yyLaPLDtmKvnhBhGwp6bfnaxZU_q5D2UaHjZqy2_VAcVJrC_iaTzVLYDaoZw"
+              />
+              <div className="min-w-0 flex-grow">
+                <h2 className="font-h2 text-h2 font-bold text-primary truncate" title={teacherName}>
+                  {teacherName}
+                </h2>
+                <p className="font-caption text-caption text-on-surface-variant hover:underline mt-0.5">Atur Profil</p>
+              </div>
+            </div>
+            {/* Nav Items */}
+            <nav className="flex-1 flex flex-col gap-2 px-2">
+              <button
+                onClick={() => {
+                  setIsMobileDrawerOpen(false);
+                  handleLogout();
+                }}
+                className="flex items-center gap-3 mx-2 px-4 py-3 rounded-full transition-all duration-200 text-error hover:bg-error-container/20 hover:text-error mt-auto cursor-pointer"
+              >
+                <span className="material-symbols-outlined">logout</span>
+                <span className="font-body-md text-body-md font-bold">Keluar</span>
+              </button>
+            </nav>
+          </aside>
+        </>
+      )}
 
       {/* Page Canvas Container */}
-      <div key={pathname} className="flex-grow flex flex-col animate-fade-in">
+      <div key={`${pathname}-${syncKey}`} className="flex-grow flex flex-col page-fade-in">
         {children}
       </div>
 
@@ -461,6 +675,70 @@ export default function ClientLayout({ children }) {
             )}
           </Link>
         </nav>
+      )}
+      {/* Profile Modal */}
+      {isProfileModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-surface w-[95%] sm:w-full max-w-2xl rounded-xl shadow-2xl border border-outline-variant overflow-hidden flex flex-col max-h-[90vh] animate-fade-in">
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-surface-container-low border-b border-outline-variant flex items-center justify-between">
+              <h2 className="font-h2 text-h2 text-on-surface font-semibold">Atur Profil</h2>
+              <button
+                onClick={() => setIsProfileModalOpen(false)}
+                className="text-on-surface-variant hover:bg-surface-container-high p-2 rounded-full transition-all flex items-center justify-center active:scale-95 cursor-pointer"
+                aria-label="Close modal"
+                type="button"
+                disabled={isSavingProfile}
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 flex-1 overflow-y-auto font-body-md text-body-md text-on-surface-variant">
+              <form id="profileForm" onSubmit={handleProfileSubmit} className="space-y-4">
+                <div className="flex flex-col gap-xs">
+                  <label className="font-label-caps text-label-caps text-on-surface-variant">
+                    Nama Lengkap / Tampilan <span className="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={profileNameInput}
+                    onChange={(e) => setProfileNameInput(e.target.value)}
+                    className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
+                    placeholder="Masukkan nama tampilan..."
+                    disabled={isSavingProfile}
+                    autoFocus
+                  />
+                </div>
+              </form>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 bg-surface-container-low border-t border-outline-variant flex items-center justify-end gap-sm">
+              <button
+                type="button"
+                onClick={() => setIsProfileModalOpen(false)}
+                className="px-4 py-2 border border-outline text-on-surface hover:bg-surface-container-high rounded font-label-caps text-label-caps transition-colors cursor-pointer"
+                disabled={isSavingProfile}
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                form="profileForm"
+                className="px-4 py-2 bg-primary text-on-primary rounded font-label-caps text-label-caps shadow-sm hover:bg-primary/95 transition-colors flex items-center gap-xs cursor-pointer disabled:opacity-50"
+                disabled={isSavingProfile}
+              >
+                {isSavingProfile && (
+                  <span className="material-symbols-outlined text-[16px] animate-spin">sync</span>
+                )}
+                Simpan
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

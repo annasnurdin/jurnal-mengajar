@@ -5,6 +5,27 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 
+const flattenRiwayat = (dailyRecords) => {
+  const flat = [];
+  if (!Array.isArray(dailyRecords)) return flat;
+  dailyRecords.forEach(day => {
+    if (day.classesList) {
+      day.classesList.forEach(clsRec => {
+        flat.push({
+          ...clsRec,
+          id: `${day.id}_${clsRec.kelas}`,
+          dailyId: day.id,
+          tanggal: day.tanggal,
+          synced: day.synced
+        });
+      });
+    } else {
+      flat.push(day);
+    }
+  });
+  return flat;
+};
+
 function PresensiContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -66,7 +87,7 @@ function PresensiContent() {
       const storedRiwayat = localStorage.getItem("riwayat_presensi");
       if (storedRiwayat) {
         try {
-          return JSON.parse(storedRiwayat);
+          return flattenRiwayat(JSON.parse(storedRiwayat));
         } catch (e) {}
       }
     }
@@ -107,7 +128,7 @@ function PresensiContent() {
     setClasses(uniqueClasses);
     if (cachedRiwayat) {
       try {
-        setRiwayat(JSON.parse(cachedRiwayat));
+        setRiwayat(flattenRiwayat(JSON.parse(cachedRiwayat)));
       } catch (e) {}
     }
 
@@ -364,15 +385,35 @@ function PresensiContent() {
     showToast("Menghubungkan ke server...", "info");
 
     setTimeout(() => {
-      const updated = riwayat.map(item => {
+      const updatedFlat = riwayat.map(item => {
         if (item.id === recordId) {
           return { ...item, synced: true };
         }
         return item;
       });
+      setRiwayat(updatedFlat);
 
-      setRiwayat(updated);
-      localStorage.setItem("riwayat_presensi", JSON.stringify(updated));
+      const flatItem = riwayat.find(item => item.id === recordId);
+      const dailyId = flatItem?.dailyId;
+
+      if (dailyId) {
+        const storedRiwayat = localStorage.getItem("riwayat_presensi");
+        if (storedRiwayat) {
+          try {
+            const parsed = JSON.parse(storedRiwayat);
+            const updatedDaily = parsed.map(day => {
+              if (day.id === dailyId) {
+                return { ...day, synced: true };
+              }
+              return day;
+            });
+            localStorage.setItem("riwayat_presensi", JSON.stringify(updatedDaily));
+          } catch (e) {
+            console.error(e);
+          }
+        }
+      }
+
       setIsSyncing(prev => ({ ...prev, [recordId]: false }));
       showToast("Data presensi berhasil disinkronkan ke Google Sheet!");
     }, 1500);
@@ -402,7 +443,7 @@ function PresensiContent() {
   if (!kelasParam) {
     return (
       <main className="flex-grow px-container-margin py-md max-w-7xl mx-auto w-full">
-        <div className="mb-lg">
+        <div className="mb-lg text-center">
           <h2 className="font-display text-display text-primary">Presensi Kelas</h2>
           <p className="font-body-md text-body-md text-on-surface-variant mt-1">
             Pilih kelas terlebih dahulu untuk mulai mengambil presensi siswa.
@@ -461,7 +502,7 @@ function PresensiContent() {
                     {record.synced ? (
                       <span className="text-emerald-600 font-label-caps text-label-caps flex items-center gap-1 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full">
                         <span className="material-symbols-outlined text-[18px]">cloud_done</span>
-                        Tersinkronisasi
+                        OK
                       </span>
                     ) : (
                       <button
@@ -1071,7 +1112,7 @@ function PresensiContent() {
                       {record.synced ? (
                         <span className="text-emerald-600 font-label-caps text-label-caps flex items-center gap-1 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full">
                           <span className="material-symbols-outlined text-[18px]">cloud_done</span>
-                          Tersinkronisasi
+                          OK
                         </span>
                       ) : (
                         <button

@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-
+import { useState, useEffect, useCallback, useRef } from "react";
 
 export default function Home() {
   const [entries, setEntries] = useState(() => {
@@ -56,6 +55,9 @@ export default function Home() {
   // Track individual row syncing state
   const [syncingIds, setSyncingIds] = useState({});
 
+  // Materi Pokok list state
+  const [materiList, setMateriList] = useState([]);
+
   // Form States
   const [dateInput, setDateInput] = useState("");
   const [formData, setFormData] = useState({
@@ -68,6 +70,8 @@ export default function Home() {
 
   // Toast Notification State
   const [toast, setToast] = useState(null);
+  const [dateFilter, setDateFilter] = useState("");
+  const [classFilter, setClassFilter] = useState("");
 
   // Show toast utility
   const showToast = (message, type = "success") => {
@@ -101,6 +105,24 @@ export default function Home() {
     return `${dayName}, ${dayNum < 10 ? '0' + dayNum : dayNum} ${monthName} ${year}`;
   };
 
+  const matchesDateFilter = (entryDateStr, filterDateIso) => {
+    if (!filterDateIso) return true;
+    if (!entryDateStr) return false;
+
+    const filterDate = new Date(filterDateIso);
+    if (isNaN(filterDate.getTime())) return true;
+
+    const formattedFilter = formatHariTanggal(filterDateIso);
+    const parts = formattedFilter.split(", ")[1]?.split(" ") || [];
+    if (parts.length === 3) {
+      const [day, month, year] = parts;
+      const cleanEntry = entryDateStr.toLowerCase();
+      return cleanEntry.includes(day) && cleanEntry.includes(month.toLowerCase()) && cleanEntry.includes(year);
+    }
+
+    return entryDateStr.toLowerCase().includes(filterDateIso);
+  };
+
   const fetchJurnal = useCallback(async (showGlobalSpinner = true) => {
     if (showGlobalSpinner) {
       setIsLoading(true);
@@ -126,7 +148,9 @@ export default function Home() {
       // Merge sheet entries and local unsynced entries
       const mergedMap = new Map();
       sheetEntries.forEach(item => {
-        mergedMap.set(item.ID, { ...item, synced: true });
+        const rawDate = item["Hari, tanggal"];
+        const formattedDate = rawDate && !rawDate.includes(",") ? formatHariTanggal(rawDate) : rawDate;
+        mergedMap.set(item.ID, { ...item, "Hari, tanggal": formattedDate, synced: true });
       });
       localEntries.forEach(item => {
         if (!item.synced) {
@@ -159,6 +183,8 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+
     const timer = setTimeout(() => {
       let hasCached = false;
       if (typeof window !== "undefined") {
@@ -170,9 +196,15 @@ export default function Home() {
           } catch (e) {}
         }
       }
-      fetchJurnal(!hasCached);
+      if (active && !hasCached) {
+        fetchJurnal(true);
+      }
     }, 0);
-    return () => clearTimeout(timer);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [fetchJurnal]);
 
   useEffect(() => {
@@ -190,6 +222,43 @@ export default function Home() {
         } catch (e) {
           console.error(e);
         }
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storedMateri = localStorage.getItem("daftar_materi_pokok");
+      if (storedMateri) {
+        try {
+          const parsed = JSON.parse(storedMateri);
+          if (Array.isArray(parsed)) {
+            const timer = setTimeout(() => {
+              setMateriList(parsed);
+            }, 0);
+            return () => clearTimeout(timer);
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      } else {
+        // Fetch from API directly if not cached
+        fetch("/api/materi-pokok")
+          .then((res) => res.json())
+          .then((result) => {
+            if (result.data) {
+              const mapped = result.data.map((item) => ({
+                id: item.ID || item._rowNum,
+                name: item["Materi Pokok"] || "",
+                _rowNum: item._rowNum
+              }));
+              const timer = setTimeout(() => {
+                setMateriList(mapped);
+              }, 0);
+              localStorage.setItem("daftar_materi_pokok", JSON.stringify(mapped));
+            }
+          })
+          .catch((e) => console.error("Gagal load materi pokok", e));
       }
     }
   }, []);
@@ -312,8 +381,14 @@ export default function Home() {
 
   const confirmDelete = async () => {
     if (!entryToDelete) return;
-    const id = entryToDelete.ID;
+    const entry = entryToDelete;
+    const id = entry.ID;
+    const isSynced = entry.synced;
+    const rowNum = entry._rowNum;
     
+    // Close modal instantly
+    closeDeleteModal();
+
     // Remove locally
     const updated = entries.filter((e) => e.ID !== id);
     setEntries(updated);
@@ -322,13 +397,14 @@ export default function Home() {
       localStorage.setItem("jurnal_entries", JSON.stringify(updated));
     }
 
-    if (entryToDelete.synced) {
+    if (isSynced) {
+      showToast("Menghapus jurnal dari Google Sheet...", "info");
       try {
-        const res = await fetch(`/api/jurnal?id=${id || entryToDelete._rowNum}`, {
+        const res = await fetch(`/api/jurnal?id=${id || rowNum}`, {
           method: "DELETE",
         });
         if (!res.ok) throw new Error("Gagal menghapus jurnal di sheet");
-        showToast("Jurnal berhasil dihapus dari Google Sheet!");
+        showToast("Jurnal berhasil dihapus dari Google Sheet!", "success");
       } catch (error) {
         console.error(error);
         showToast("Gagal menghapus di Google Sheet, tetapi dihapus secara lokal.", "warning");
@@ -336,7 +412,6 @@ export default function Home() {
     } else {
       showToast("Jurnal berhasil dihapus secara lokal!", "success");
     }
-    closeDeleteModal();
   };
 
   // Sync individual row to Apps Script
@@ -379,7 +454,6 @@ export default function Home() {
       }
 
       showToast("Jurnal berhasil disinkronkan ke Google Sheet!");
-      await fetchJurnal(false);
     } catch (e) {
       console.error(e);
       showToast("Gagal sinkronisasi data ke Google Sheets.", "error");
@@ -388,15 +462,21 @@ export default function Home() {
     }
   };
 
-  // Filter entries based on search
+  // Filter entries based on search and filters
   const filteredEntries = parsedEntries.filter((entry) => {
     const query = searchQuery.toLowerCase();
-    return (
+    const matchesQuery = !query || (
       (entry["Hari, tanggal"] || "").toLowerCase().includes(query) ||
       (entry["Materi Pokok"] || "").toLowerCase().includes(query) ||
       (entry["Kegiatan Pembelajaran"] || "").toLowerCase().includes(query) ||
       (entry["Kelas"] || "").toLowerCase().includes(query)
     );
+
+    const matchesClass = !classFilter || entry["Kelas"] === classFilter;
+
+    const matchesDate = matchesDateFilter(entry["Hari, tanggal"], dateFilter);
+
+    return matchesQuery && matchesClass && matchesDate;
   });
 
   return (
@@ -432,21 +512,65 @@ export default function Home() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <div className="flex gap-sm">
-            <button
-              onClick={() => showToast("Urutkan tanggal akan segera hadir!", "info")}
-              className="bg-surface border border-outline rounded p-3 text-on-surface-variant flex items-center gap-xs hover:bg-surface-container-high transition-colors"
-            >
-              <span className="material-symbols-outlined text-[20px]">calendar_today</span>
-              <span className="font-label-caps text-label-caps hidden sm:inline">Tanggal</span>
-            </button>
-            <button
-              onClick={() => showToast("Filter kelas akan segera hadir!", "info")}
-              className="bg-surface border border-outline rounded p-3 text-on-surface-variant flex items-center gap-xs hover:bg-surface-container-high transition-colors"
-            >
-              <span className="material-symbols-outlined text-[20px]">filter_list</span>
-              <span className="font-label-caps text-label-caps hidden sm:inline">Kelas</span>
-            </button>
+          <div className="flex flex-wrap gap-sm">
+            {/* Filter Tanggal */}
+            <div className="relative flex items-center">
+              <span className="material-symbols-outlined absolute left-3 text-on-surface-variant text-[20px] pointer-events-none">
+                calendar_today
+              </span>
+              <input
+                type="date"
+                value={dateFilter}
+                onClick={(e) => {
+                  try {
+                    e.target.showPicker();
+                  } catch (err) {}
+                }}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="pl-10 pr-8 py-2.5 bg-surface border border-outline rounded font-body-md text-body-md text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all w-full sm:w-44"
+                title="Filter Tanggal"
+              />
+              {dateFilter && (
+                <button
+                  onClick={() => setDateFilter("")}
+                  className="absolute right-2 text-on-surface-variant hover:text-error p-1 rounded-full hover:bg-surface-container-high transition-colors"
+                  title="Hapus Filter"
+                >
+                  <span className="material-symbols-outlined text-[16px]">close</span>
+                </button>
+              )}
+            </div>
+
+            {/* Filter Kelas */}
+            <div className="relative flex items-center">
+              <span className="material-symbols-outlined absolute left-3 text-on-surface-variant text-[20px] pointer-events-none">
+                filter_list
+              </span>
+              <select
+                value={classFilter}
+                onChange={(e) => setClassFilter(e.target.value)}
+                className={`pl-10 ${classFilter ? "pr-10" : "pr-8"} py-2.5 bg-surface border border-outline rounded font-body-md text-body-md text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 outline-none transition-all appearance-none cursor-pointer w-full sm:w-36`}
+                title="Filter Kelas"
+              >
+                <option value="">Semua Kelas</option>
+                {classesList.map((cls) => (
+                  <option key={cls} value={cls}>Kelas {cls}</option>
+                ))}
+              </select>
+              {classFilter ? (
+                <button
+                  onClick={() => setClassFilter("")}
+                  className="absolute right-2 text-on-surface-variant hover:text-error p-1 rounded-full hover:bg-surface-container-high transition-colors"
+                  title="Hapus Filter"
+                >
+                  <span className="material-symbols-outlined text-[16px]">close</span>
+                </button>
+              ) : (
+                <span className="material-symbols-outlined absolute right-2 text-on-surface-variant text-[18px] pointer-events-none">
+                  arrow_drop_down
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -480,8 +604,8 @@ export default function Home() {
           </div>
         ) : (
           <>
-            {/* Mobile Card View (md:hidden) */}
-            <div className="md:hidden flex flex-col gap-gutter">
+            {/* Mobile/Tablet Card View (lg:hidden) */}
+            <div className="lg:hidden grid grid-cols-1 md:grid-cols-2 gap-gutter">
               {filteredEntries.map((entry, idx) => (
                 <div
                   key={entry.ID || entry._rowNum || idx}
@@ -509,7 +633,7 @@ export default function Home() {
                       {entry.synced ? (
                         <span className="text-emerald-600 flex items-center gap-0.5 text-[10px]">
                           <span className="material-symbols-outlined text-[14px]">cloud_done</span>
-                          Ok
+                          OK
                         </span>
                       ) : syncingIds[entry.ID] ? (
                         <span className="text-amber-500 flex items-center gap-0.5 text-[10px]">
@@ -549,33 +673,33 @@ export default function Home() {
               ))}
             </div>
 
-            {/* Desktop Data Table View (hidden md:block) */}
-            <div className="hidden md:block bg-surface border border-outline-variant rounded-lg overflow-x-auto shadow-sm">
-              <table className="w-full text-left border-collapse min-w-[900px]">
+            {/* Desktop Data Table View (hidden lg:block) */}
+            <div className="hidden lg:block bg-surface border border-outline-variant rounded-lg overflow-x-auto shadow-sm">
+              <table className="w-full text-left border-collapse min-w-[650px] xl:min-w-[900px]">
                 <thead className="bg-surface-container-low border-b border-outline-variant">
                   <tr>
-                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-16 text-center">
+                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-12 xl:w-16 text-center">
                       No
                     </th>
-                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-48">
+                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-36 xl:w-48">
                       Hari/Tanggal
                     </th>
-                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-24">
+                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-16 xl:w-24">
                       Jam ke-
                     </th>
-                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-28">
+                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-16 xl:w-28">
                       Kelas
                     </th>
-                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-48">
+                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-40 xl:w-48">
                       Materi Pokok
                     </th>
-                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant">
+                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant hidden xl:table-cell">
                       Kegiatan Pembelajaran
                     </th>
-                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-32 text-center">
+                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-24 xl:w-32 text-center">
                       Status
                     </th>
-                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-24 text-center">
+                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-16 xl:w-24 text-center">
                       Aksi
                     </th>
                   </tr>
@@ -598,14 +722,14 @@ export default function Home() {
                       </td>
                       <td className="py-3 px-4">{entry["Kelas"]}</td>
                       <td className="py-3 px-4 font-semibold">{entry["Materi Pokok"]}</td>
-                      <td className="py-3 px-4 text-on-surface-variant truncate max-w-[200px]" title={entry["Kegiatan Pembelajaran"]}>
+                      <td className="py-3 px-4 text-on-surface-variant truncate max-w-[200px] hidden xl:table-cell" title={entry["Kegiatan Pembelajaran"]}>
                         {entry["Kegiatan Pembelajaran"] || "-"}
                       </td>
                       <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                         {entry.synced ? (
                           <span className="text-emerald-600 inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full text-xs font-semibold">
                             <span className="material-symbols-outlined text-[16px]">cloud_done</span>
-                            Ok
+                            OK
                           </span>
                         ) : (
                           <button
@@ -652,7 +776,7 @@ export default function Home() {
       {/* Floating Action Button */}
       <button
         onClick={openCreateModal}
-        className="fixed bottom-24 right-container-margin md:bottom-lg bg-primary-container text-on-primary-container w-14 h-14 rounded-full flex items-center justify-center shadow-md hover:scale-105 active:scale-95 transition-all z-40 group"
+        className="fixed bottom-[92px] right-container-margin md:bottom-8 md:right-8 bg-primary text-on-primary w-14 h-14 rounded-full shadow-lg flex items-center justify-center hover:bg-primary-container hover:shadow-xl transition-all duration-200 z-40 active:scale-95 animate-fade-in group"
       >
         <span className="material-symbols-outlined text-[28px] group-hover:rotate-90 transition-transform duration-300">
           add
@@ -691,6 +815,11 @@ export default function Home() {
                       <input
                         type="date"
                         value={dateInput}
+                        onClick={(e) => {
+                          try {
+                            e.target.showPicker();
+                          } catch (err) {}
+                        }}
                         onChange={handleDateChange}
                         className="bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md w-full sm:w-auto"
                       />
@@ -706,7 +835,7 @@ export default function Home() {
                       />
                     </div>
                     <p className="font-caption text-caption text-on-surface-variant mt-1">
-                      Pilih penanggalan tanggal di sebelah kiri untuk otomatisasi hari, atau ketik langsung di kolom teks.
+                      Tanggal dapat diberi keterangan
                     </p>
                   </div>
 
@@ -758,16 +887,21 @@ export default function Home() {
                     <label className="font-label-caps text-label-caps text-on-surface-variant">
                       Materi Pokok <span className="text-error">*</span>
                     </label>
-                    <input
-                      type="text"
+                    <select
                       required
-                      placeholder="Contoh: Aljabar Linier Dasar"
                       value={formData["Materi Pokok"]}
                       onChange={(e) =>
                         setFormData((prev) => ({ ...prev, "Materi Pokok": e.target.value }))
                       }
                       className="w-full bg-surface border border-outline rounded p-2 text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-body-md"
-                    />
+                    >
+                      <option value="" disabled>-- Pilih Materi Pokok --</option>
+                      {materiList.map((m) => (
+                        <option key={m.id} value={m.name}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Kegiatan Pembelajaran */}

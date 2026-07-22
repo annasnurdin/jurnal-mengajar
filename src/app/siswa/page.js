@@ -327,10 +327,10 @@ function SiswaContent() {
       <main className="w-full max-w-7xl px-container-margin py-md flex-grow mx-auto">
         
         {/* Header & Search */}
-        <div className="mb-lg flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="mb-lg text-center flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h2 className="font-display text-display text-on-surface mb-2">Daftar Siswa</h2>
-            <p className="font-body-md text-body-md text-on-surface-variant">Kelola data siswa, NIS, dan kelas secara lokal dengan sinkronisasi Google Sheets.</p>
+            <p className="font-body-md text-body-md text-on-surface-variant">Kelola data siswa</p>
           </div>
           <div className="relative w-full md:w-72">
             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">
@@ -461,7 +461,7 @@ function SiswaContent() {
       </main>
 
       {/* Floating Action & Sync Buttons Container */}
-      <div className="fixed bottom-24 right-container-margin md:bottom-8 md:right-8 flex flex-col items-center gap-3 z-40 animate-fade-in">
+      <div className="fixed bottom-[92px] right-container-margin md:bottom-8 md:right-8 flex flex-col items-center gap-3 z-40 animate-fade-in">
         {/* Sync Button */}
         {hasUnsynced && (
           <button
