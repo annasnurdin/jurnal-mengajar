@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 
+let isJurnalSynced = false;
 
 export default function Home() {
   const [entries, setEntries] = useState(() => {
@@ -126,7 +127,9 @@ export default function Home() {
       // Merge sheet entries and local unsynced entries
       const mergedMap = new Map();
       sheetEntries.forEach(item => {
-        mergedMap.set(item.ID, { ...item, synced: true });
+        const rawDate = item["Hari, tanggal"];
+        const formattedDate = rawDate && !rawDate.includes(",") ? formatHariTanggal(rawDate) : rawDate;
+        mergedMap.set(item.ID, { ...item, "Hari, tanggal": formattedDate, synced: true });
       });
       localEntries.forEach(item => {
         if (!item.synced) {
@@ -159,6 +162,9 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (isJurnalSynced) return;
+    isJurnalSynced = true;
+
     const timer = setTimeout(() => {
       let hasCached = false;
       if (typeof window !== "undefined") {
@@ -480,8 +486,8 @@ export default function Home() {
           </div>
         ) : (
           <>
-            {/* Mobile Card View (md:hidden) */}
-            <div className="md:hidden flex flex-col gap-gutter">
+            {/* Mobile/Tablet Card View (lg:hidden) */}
+            <div className="lg:hidden grid grid-cols-1 md:grid-cols-2 gap-gutter">
               {filteredEntries.map((entry, idx) => (
                 <div
                   key={entry.ID || entry._rowNum || idx}
@@ -549,33 +555,33 @@ export default function Home() {
               ))}
             </div>
 
-            {/* Desktop Data Table View (hidden md:block) */}
-            <div className="hidden md:block bg-surface border border-outline-variant rounded-lg overflow-x-auto shadow-sm">
-              <table className="w-full text-left border-collapse min-w-[900px]">
+            {/* Desktop Data Table View (hidden lg:block) */}
+            <div className="hidden lg:block bg-surface border border-outline-variant rounded-lg overflow-x-auto shadow-sm">
+              <table className="w-full text-left border-collapse min-w-[650px] xl:min-w-[900px]">
                 <thead className="bg-surface-container-low border-b border-outline-variant">
                   <tr>
-                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-16 text-center">
+                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-12 xl:w-16 text-center">
                       No
                     </th>
-                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-48">
+                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-36 xl:w-48">
                       Hari/Tanggal
                     </th>
-                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-24">
+                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-16 xl:w-24">
                       Jam ke-
                     </th>
-                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-28">
+                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-16 xl:w-28">
                       Kelas
                     </th>
-                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-48">
+                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-40 xl:w-48">
                       Materi Pokok
                     </th>
-                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant">
+                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant hidden xl:table-cell">
                       Kegiatan Pembelajaran
                     </th>
-                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-32 text-center">
+                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-24 xl:w-32 text-center">
                       Status
                     </th>
-                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-24 text-center">
+                    <th className="py-3 px-4 font-label-caps text-label-caps text-on-surface-variant w-16 xl:w-24 text-center">
                       Aksi
                     </th>
                   </tr>
@@ -598,7 +604,7 @@ export default function Home() {
                       </td>
                       <td className="py-3 px-4">{entry["Kelas"]}</td>
                       <td className="py-3 px-4 font-semibold">{entry["Materi Pokok"]}</td>
-                      <td className="py-3 px-4 text-on-surface-variant truncate max-w-[200px]" title={entry["Kegiatan Pembelajaran"]}>
+                      <td className="py-3 px-4 text-on-surface-variant truncate max-w-[200px] hidden xl:table-cell" title={entry["Kegiatan Pembelajaran"]}>
                         {entry["Kegiatan Pembelajaran"] || "-"}
                       </td>
                       <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
