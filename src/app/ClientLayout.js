@@ -158,6 +158,7 @@ export default function ClientLayout({ children }) {
               mappedMateri = dataMateri.data.map((item) => ({
                 id: item.ID || item._rowNum,
                 name: item["Materi Pokok"] || "",
+                synced: true,
                 _rowNum: item._rowNum
               }));
             }
@@ -298,6 +299,7 @@ export default function ClientLayout({ children }) {
           mappedMateri = dataMateri.data.map((item) => ({
             id: item.ID || item._rowNum,
             name: item["Materi Pokok"] || "",
+            synced: true,
             _rowNum: item._rowNum
           }));
         }

@@ -558,7 +558,7 @@ export default function Home() {
                       {entry.synced ? (
                         <span className="text-emerald-600 flex items-center gap-0.5 text-[10px]">
                           <span className="material-symbols-outlined text-[14px]">cloud_done</span>
-                          Ok
+                          OK
                         </span>
                       ) : syncingIds[entry.ID] ? (
                         <span className="text-amber-500 flex items-center gap-0.5 text-[10px]">
@@ -654,7 +654,7 @@ export default function Home() {
                         {entry.synced ? (
                           <span className="text-emerald-600 inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full text-xs font-semibold">
                             <span className="material-symbols-outlined text-[16px]">cloud_done</span>
-                            Ok
+                            OK
                           </span>
                         ) : (
                           <button

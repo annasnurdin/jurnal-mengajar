@@ -330,7 +330,7 @@ function SiswaContent() {
         <div className="mb-lg flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h2 className="font-display text-display text-on-surface mb-2">Daftar Siswa</h2>
-            <p className="font-body-md text-body-md text-on-surface-variant">Kelola data siswa, NIS, dan kelas secara lokal dengan sinkronisasi Google Sheets.</p>
+            <p className="font-body-md text-body-md text-on-surface-variant">Kelola data siswa</p>
           </div>
           <div className="relative w-full md:w-72">
             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">

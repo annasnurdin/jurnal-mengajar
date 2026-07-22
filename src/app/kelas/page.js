@@ -237,7 +237,7 @@ function KelasContent() {
           <div>
             <h2 className="font-display text-display text-primary">Daftar Kelas</h2>
             <p className="font-body-md text-body-md text-on-surface-variant mt-1">
-              Kelola kelas dan wali kelas tahun ajaran ini. Klik kelas untuk mulai melakukan presensi.
+              Klik untuk melakukan presensi.
             </p>
           </div>
           <div className="relative w-full md:w-72">

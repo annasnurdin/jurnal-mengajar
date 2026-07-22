@@ -65,9 +65,9 @@ export default function Manajemen() {
       {/* Main Content Canvas */}
       <main className="max-w-7xl mx-auto px-container-margin py-md w-full">
         <header className="mb-8 text-center md:text-left">
-          <h2 className="font-display text-display text-on-surface mb-2">Manajemen Data</h2>
+          <h2 className="font-display text-display text-primary">Manajemen Data</h2>
           <p className="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">
-            Kelola data referensi utama untuk jurnal mengajar Anda. Pastikan data siswa, kelas, dan materi selalu up-to-date.
+            Dashboard pengelolaan data
           </p>
         </header>
 
